@@ -1,0 +1,209 @@
+// Prisma Schema for Meeting Assistant
+// Database: PostgreSQL 15+
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// USERS
+// =============================================================================
+
+model User {
+  id          String   @id @default(uuid())
+  zoomUserId  String   @unique @map("zoom_user_id")
+  email       String
+  displayName String   @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  meetings   Meeting[]
+  highlights Highlight[]
+  aiSessions AiSession[]
+  tokens     UserToken[]
+
+  @@map("users")
+}
+
+// =============================================================================
+// USER TOKENS (Encrypted OAuth tokens)
+// =============================================================================
+
+model UserToken {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken  String   @map("access_token") @db.Text // Encrypted
+  refreshToken String   @map("refresh_token") @db.Text // Encrypted
+  expiresAt    DateTime @map("expires_at")
+  scopes       String[] // Array of OAuth scopes
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("user_tokens")
+}
+
+// =============================================================================
+// MEETINGS
+// =============================================================================
+
+model Meeting {
+  id            String    @id @default(uuid())
+  zoomMeetingId String    @map("zoom_meeting_id")
+  title         String
+  startTime     DateTime  @map("start_time")
+  endTime       DateTime? @map("end_time")
+  duration      Int? // milliseconds
+  status        String    @default("ongoing") // 'ongoing' | 'completed' | 'failed'
+  language      String    @default("en")
+  timezone      String    @default("UTC")
+  ownerId       String    @map("owner_id")
+  owner         User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  speakers  Speaker[]
+  segments  TranscriptSegment[]
+  highlights Highlight[]
+  vttFiles  VttFile[]
+
+  @@index([ownerId, startTime])
+  @@index([zoomMeetingId])
+  @@index([status])
+  @@map("meetings")
+}
+
+// =============================================================================
+// SPEAKERS
+// =============================================================================
+
+model Speaker {
+  id                String  @id @default(uuid())
+  meetingId         String  @map("meeting_id")
+  meeting           Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  label             String // "Speaker 1", "Speaker 2", etc.
+  zoomParticipantId String? @map("zoom_participant_id")
+  displayName       String? @map("display_name")
+  role              String? // 'host' | 'participant' | 'system'
+
+  // Relations
+  segments TranscriptSegment[]
+
+  @@index([meetingId])
+  @@map("speakers")
+}
+
+// =============================================================================
+// TRANSCRIPT SEGMENTS
+// =============================================================================
+
+model TranscriptSegment {
+  id         String   @id @default(uuid())
+  meetingId  String   @map("meeting_id")
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  speakerId  String?  @map("speaker_id")
+  speaker    Speaker? @relation(fields: [speakerId], references: [id], onDelete: SetNull)
+  tStartMs   Int      @map("t_start_ms") // Timestamp start (milliseconds)
+  tEndMs     Int      @map("t_end_ms") // Timestamp end (milliseconds)
+  seqNo      BigInt   @map("seq_no") // Sequence number for ordering
+  text       String   @db.Text
+  confidence Float? // Speech-to-text confidence (0.0 - 1.0)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([meetingId, seqNo])
+  @@index([meetingId, tStartMs])
+  @@index([meetingId, seqNo])
+  @@map("transcript_segments")
+}
+
+// =============================================================================
+// VTT FILES (WebVTT exports)
+// =============================================================================
+
+model VttFile {
+  id          String   @id @default(uuid())
+  meetingId   String   @map("meeting_id")
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  storageKey  String   @map("storage_key") // File path or S3 key
+  version     Int      @default(1)
+  generatedAt DateTime @default(now()) @map("generated_at")
+
+  @@index([meetingId])
+  @@map("vtt_files")
+}
+
+// =============================================================================
+// HIGHLIGHTS (User-created bookmarks)
+// =============================================================================
+
+model Highlight {
+  id        String   @id @default(uuid())
+  meetingId String   @map("meeting_id")
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tStartMs  Int      @map("t_start_ms") // Highlight start time
+  tEndMs    Int      @map("t_end_ms") // Highlight end time
+  title     String
+  notes     String?  @db.Text
+  tags      String[] // Array of tags
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([meetingId])
+  @@index([userId])
+  @@map("highlights")
+}
+
+// =============================================================================
+// AI FEATURES (Optional, feature-flagged)
+// =============================================================================
+
+model AiSession {
+  id        String      @id @default(uuid())
+  userId    String      @map("user_id")
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  createdAt DateTime    @default(now()) @map("created_at")
+  messages  AiMessage[]
+
+  @@index([userId])
+  @@map("ai_sessions")
+}
+
+model AiMessage {
+  id        String       @id @default(uuid())
+  sessionId String       @map("session_id")
+  session   AiSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String // 'user' | 'assistant' | 'system'
+  content   String       @db.Text
+  filters   Json? // Search filters used (meeting_ids, date_range, etc.)
+  createdAt DateTime     @default(now()) @map("created_at")
+  citations AiCitation[]
+
+  @@index([sessionId])
+  @@map("ai_messages")
+}
+
+model AiCitation {
+  id         String    @id @default(uuid())
+  messageId  String    @map("message_id")
+  message    AiMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  meetingId  String    @map("meeting_id")
+  segmentId  String?   @map("segment_id")
+  tStartMs   Int       @map("t_start_ms")
+  tEndMs     Int       @map("t_end_ms")
+  confidence Float?
+
+  @@index([messageId])
+  @@map("ai_citations")
+}

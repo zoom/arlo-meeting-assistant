@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: meeting-assistant-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: meeting_assistant
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (optional, for WebSocket scaling)
+  redis:
+    image: redis:7-alpine
+    container_name: meeting-assistant-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - with-redis
+
+  # Backend API Server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: meeting-assistant-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/meeting_assistant
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: npm run dev
+
+  # Frontend (Zoom App)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: meeting-assistant-frontend
+    restart: unless-stopped
+    environment:
+      REACT_APP_API_URL: http://localhost:3000
+      REACT_APP_WS_URL: ws://localhost:3000
+      DANGEROUSLY_DISABLE_HOST_CHECK: "true"
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm start
+    stdin_open: true
+    tty: true
+
+  # RTMS Server (Zoom RTMS SDK)
+  # NOTE: RTMS SDK requires x86_64/amd64 platform due to native dependencies
+  # On Apple Silicon (M1/M2/M3), this will run in Rosetta emulation
+  rtms:
+    build:
+      context: ./rtms
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+    platform: linux/amd64
+    container_name: meeting-assistant-rtms
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/meeting_assistant
+      BACKEND_URL: http://backend:3000
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./rtms/src:/app/src
+      - /app/node_modules
+      - /app/prisma
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: sh -c "npm run prisma:generate && npm start"
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

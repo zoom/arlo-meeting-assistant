@@ -1,0 +1,60 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+coverage/
+.nyc_output/
+
+# Prisma
+backend/prisma/migrations/
+!backend/prisma/migrations/.gitkeep
+
+# Storage
+storage/
+uploads/
+*.vtt
+*.mp4
+*.wav
+
+# Temporary files
+tmp/
+temp/
+.cache/
+
+# Docker
+docker-compose.override.yml
+
+# Misc
+*.pem
+*.key
+.vercel

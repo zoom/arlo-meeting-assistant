@@ -1,0 +1,42 @@
+{
+  "name": "meeting-assistant",
+  "version": "0.5.0",
+  "description": "Open-source Zoom Apps meeting assistant with RTMS and AI",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "rtms"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:rtms\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm start",
+    "dev:rtms": "cd rtms && npm start",
+    "docker:up": "docker-compose up --build",
+    "docker:down": "docker-compose down",
+    "docker:clean": "docker-compose down -v",
+    "setup": "npm run setup:backend && npm run setup:frontend && npm run setup:rtms",
+    "setup:backend": "cd backend && npm install",
+    "setup:frontend": "cd frontend && npm install",
+    "setup:rtms": "cd rtms && npm install",
+    "db:migrate": "cd backend && npx prisma migrate dev",
+    "db:reset": "cd backend && npx prisma migrate reset",
+    "db:studio": "cd backend && npx prisma studio",
+    "db:generate": "cd backend && npx prisma generate"
+  },
+  "keywords": [
+    "zoom",
+    "zoom-apps",
+    "rtms",
+    "meeting-assistant",
+    "transcription",
+    "ai",
+    "openrouter"
+  ],
+  "author": "Zoom Developer Relations",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
