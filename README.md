@@ -1,8 +1,15 @@
 # Arlo Meeting Assistant 📋
 
-> Open-source Zoom Apps meeting assistant with Real-Time Media Streams (RTMS) and AI - **No bot required!**
+Arlo is a forkable, open-source **RTMS Meeting Assistant** that showcases how developers can build real-time, intelligent meeting experiences directly inside Zoom — **no meeting bot required!**
 
-**Demonstrates:** How to build intelligent meeting assistants that run natively inside Zoom meetings using RTMS for live transcription, WebSocket for real-time updates, and OpenRouter for AI-powered insights.
+This project was originally created as the "Meeting Assistant Starter Kit" and has evolved into **Arlo**, a lightweight example of how to:
+- Stream and display live meeting transcripts in real time
+- Save transcripts to a database for meeting history
+- Generate AI-powered summaries and action items
+- Search across past meetings
+- Extend functionality using Zoom's Real-Time Media Streams (RTMS) APIs
+
+Arlo is designed to help developers quickly prototype and deploy their own meeting assistants as Zoom Apps.
 
 ---
 
