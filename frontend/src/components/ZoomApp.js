@@ -9,11 +9,15 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [rtmsActive, setRtmsActive] = useState(false);
+  const [rtmsLoading, setRtmsLoading] = useState(false);
   const [ws, setWs] = useState(null);
 
   // Authenticate user
   useEffect(() => {
     async function authenticate() {
+      console.log('🔐 authenticate() called');
+      console.log('🔐 userContext:', userContext);
+      console.log('🔐 meetingContext:', meetingContext);
       try {
         // Check if user is already authorized
         if (userContext?.status === 'authorized') {
@@ -29,8 +33,9 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
           setUser(tempUser);
           setIsAuthenticated(true);
 
-          console.log('⚠️ Note: Using temp user without backend session.');
-          console.log('⚠️ WebSocket connection skipped (no token). RTMS controls will work, but live transcript display requires full OAuth.');
+          // Connect WebSocket without token for anonymous meeting streaming
+          console.log('📡 Connecting WebSocket for live transcript streaming...');
+          connectWebSocket(null, meetingContext?.meetingUUID);
           return;
         }
 
@@ -74,20 +79,45 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
       }
     }
 
-    if (!isAuthenticated && runningContext === 'inMeeting' && userContext) {
+    // Only authenticate when we have ALL the contexts we need
+    if (!isAuthenticated && runningContext === 'inMeeting' && userContext && meetingContext) {
+      console.log('🔐 All contexts available, starting authentication...');
+      console.log('🔐 meetingContext keys:', Object.keys(meetingContext || {}));
       authenticate();
     }
   }, [isAuthenticated, runningContext, meetingContext, userContext]);
 
   // Connect to WebSocket for live updates
   function connectWebSocket(token, meetingId) {
-    if (!meetingId) return;
+    console.log('🔍 connectWebSocket called with meetingId:', meetingId);
+
+    // Debug: Send meeting ID to backend for comparison
+    fetch('/api/rtms/debug-meeting', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        meetingId,
+        source: 'frontend-websocket',
+        fullContext: meetingContext,
+      }),
+    }).catch(err => console.error('Debug fetch error:', err));
+
+    if (!meetingId) {
+      console.log('⚠️ No meeting ID, skipping WebSocket connection');
+      return;
+    }
 
     // Construct WebSocket URL from current window location
+    // Use hostname (not host) to avoid including port numbers
+    // ngrok URLs should NOT have a port - they proxy on standard 443
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}?meeting_id=${meetingId}&token=${token}`;
+    const hostname = window.location.hostname;
+    let wsUrl = `${protocol}//${hostname}/ws?meeting_id=${encodeURIComponent(meetingId)}`;
+    if (token) {
+      wsUrl += `&token=${encodeURIComponent(token)}`;
+    }
     console.log('📡 Connecting to WebSocket:', wsUrl);
+    console.log('📡 Full meeting context:', meetingContext);
 
     const socket = new WebSocket(wsUrl);
 
@@ -128,6 +158,8 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
 
     socket.onerror = (error) => {
       console.error('❌ WebSocket error:', error);
+      console.error('❌ WebSocket readyState:', socket.readyState);
+      console.error('❌ WebSocket URL was:', wsUrl);
     };
 
     socket.onclose = () => {
@@ -145,10 +177,13 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
 
   // Start RTMS
   async function startRTMS() {
+    if (rtmsLoading) return; // Prevent double-clicks
+
+    setRtmsLoading(true);
     try {
       console.log('🎙️ Starting RTMS...');
 
-      await zoomSdk.callZoomApi('startRTMS', {
+      const result = await zoomSdk.callZoomApi('startRTMS', {
         audioOptions: {
           rawAudio: false,
         },
@@ -157,44 +192,62 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
         },
       });
 
-      console.log('✅ RTMS started');
+      console.log('✅ RTMS started, result:', result);
       setRtmsActive(true);
 
       await zoomSdk.showNotification({
         type: 'success',
-        title: 'Meeting Assistant',
+        title: 'Arlo',
         message: 'Transcription started',
       });
 
     } catch (error) {
       console.error('❌ Failed to start RTMS:', error);
+      console.error('❌ Error details:', error?.message, error?.code);
 
       await zoomSdk.showNotification({
         type: 'error',
         title: 'Error',
-        message: 'Failed to start transcription',
+        message: `Failed to start transcription: ${error?.message || 'Unknown error'}`,
       });
+    } finally {
+      setRtmsLoading(false);
     }
   }
 
   // Stop RTMS
   async function stopRTMS() {
+    if (rtmsLoading) return; // Prevent double-clicks
+
+    setRtmsLoading(true);
     try {
       console.log('🛑 Stopping RTMS...');
 
-      await zoomSdk.callZoomApi('stopRTMS');
+      const result = await zoomSdk.callZoomApi('stopRTMS');
 
-      console.log('✅ RTMS stopped');
+      console.log('✅ RTMS stopped, result:', result);
       setRtmsActive(false);
 
       await zoomSdk.showNotification({
         type: 'info',
-        title: 'Meeting Assistant',
+        title: 'Arlo',
         message: 'Transcription stopped',
       });
 
     } catch (error) {
       console.error('❌ Failed to stop RTMS:', error);
+      console.error('❌ Error details:', error?.message, error?.code);
+
+      // Even if API fails, try to reset the UI state
+      setRtmsActive(false);
+
+      await zoomSdk.showNotification({
+        type: 'error',
+        title: 'Error',
+        message: `Failed to stop transcription: ${error?.message || 'Unknown error'}`,
+      });
+    } finally {
+      setRtmsLoading(false);
     }
   }
 
@@ -202,8 +255,8 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
   if (runningContext !== 'inMeeting') {
     return (
       <div className="not-in-meeting">
-        <h2>📋 Meeting Assistant</h2>
-        <p>Start or join a meeting to use the Meeting Assistant.</p>
+        <h2>📋 Arlo</h2>
+        <p>Start or join a meeting to use Arlo Meeting Assistant.</p>
         <div className="features">
           <div className="feature">
             <span className="icon">📝</span>
@@ -234,7 +287,7 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
   return (
     <div className="zoom-app">
       <div className="header">
-        <h1>📋 Meeting Assistant</h1>
+        <h1>📋 Arlo</h1>
         <div className="user-info">
           <span>{user?.displayName}</span>
         </div>
@@ -242,6 +295,7 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
 
       <RTMSControls
         rtmsActive={rtmsActive}
+        rtmsLoading={rtmsLoading}
         onStart={startRTMS}
         onStop={stopRTMS}
       />

@@ -5,6 +5,12 @@ const rtms = rtmsModule.default; // ES module default export
 const { PrismaClient } = require('@prisma/client');
 const axios = require('axios');
 
+// Enable verbose logging for RTMS SDK
+rtms.configureLogger({
+  level: rtms.LogLevel.TRACE,
+  enabled: true
+});
+
 const app = express();
 const prisma = new PrismaClient();
 
@@ -67,13 +73,39 @@ async function handleRTMSStarted(payload) {
   console.log(`Stream ID: ${rtms_stream_id}`);
   console.log(`Server URLs: ${server_urls}`);
 
+  // Check if already connected to this meeting (prevent duplicate webhook handling)
+  if (activeSessions.has(meeting_uuid)) {
+    console.log('⚠️ Already connected to this meeting, ignoring duplicate webhook');
+    return;
+  }
+
   try {
-    // Set up transcript data handler
-    rtms.onTranscriptData((data) => {
-      console.log('📝 Raw transcript event:', JSON.stringify(data, null, 2));
-      handleTranscript(meeting_uuid, data).catch(err => {
-        console.error('Error handling transcript:', err);
-      });
+    // Set up transcript data handler BEFORE joining
+    // Callback signature: (buffer, size, timestamp, metadata)
+    rtms.onTranscriptData((buffer, size, timestamp, metadata) => {
+      try {
+        // Convert buffer to string (UTF-8 encoding)
+        const text = buffer.toString('utf8');
+        console.log('📝 Raw transcript event:');
+        console.log(`  Text: ${text}`);
+        console.log(`  Size: ${size}`);
+        console.log(`  Timestamp: ${timestamp}`);
+        console.log(`  Metadata:`, JSON.stringify(metadata, null, 2));
+
+        // Create transcript object for handleTranscript
+        const transcriptData = {
+          text,
+          timestamp,
+          size,
+          ...metadata
+        };
+
+        handleTranscript(meeting_uuid, transcriptData).catch(err => {
+          console.error('Error handling transcript:', err);
+        });
+      } catch (err) {
+        console.error('Error processing transcript buffer:', err);
+      }
     });
 
     // Set up join confirmation handler
@@ -87,20 +119,31 @@ async function handleRTMSStarted(payload) {
       activeSessions.delete(meeting_uuid);
     });
 
-    // Join the RTMS session
-    const result = rtms.join({
-      uuid: meeting_uuid,
-      stream_id: rtms_stream_id,
-      gateway: server_urls,
+    // Set up session update handler
+    rtms.onSessionUpdate((event, uuid) => {
+      console.log('📡 Session update:', event, uuid);
     });
 
-    console.log('✅ Join result:', result);
+    // Set up user update handler
+    rtms.onUserUpdate((event, uuid, name) => {
+      console.log('👤 User update:', event, uuid, name);
+    });
 
-    // Store session info
+    // Store session info BEFORE joining to prevent duplicate handling
     activeSessions.set(meeting_uuid, {
       streamId: rtms_stream_id,
       startTime: new Date(),
     });
+
+    // Join the RTMS session with polling enabled
+    const result = rtms.join({
+      meeting_uuid: meeting_uuid,
+      rtms_stream_id: rtms_stream_id,
+      server_urls: server_urls,
+      pollInterval: 100, // Poll every 100ms for data
+    });
+
+    console.log('✅ Join result:', result);
 
     // Notify backend that RTMS is active
     await notifyBackend(meeting_uuid, 'rtms_started');
@@ -108,6 +151,8 @@ async function handleRTMSStarted(payload) {
   } catch (error) {
     console.error('❌ Failed to start RTMS:', error);
     console.error('Stack:', error.stack);
+    // Remove from active sessions on failure
+    activeSessions.delete(meeting_uuid);
   }
 }
 
@@ -161,97 +206,33 @@ async function handleRTMSStopped(payload) {
 async function handleTranscript(meetingId, transcript) {
   console.log('📝 Transcript:', transcript);
 
-  try {
-    const {
-      participant_id,
-      sequence,
-      timestamp_start,
-      timestamp_end,
-      text,
-      confidence,
-    } = transcript;
+  const {
+    participant_id,
+    sequence,
+    timestamp_start,
+    timestamp_end,
+    text,
+    confidence,
+    userName,
+    userId,
+  } = transcript;
 
-    // Get or create meeting
-    let meeting = await prisma.meeting.findFirst({
-      where: { zoomMeetingId: meetingId },
-    });
+  // FIRST: Broadcast immediately to frontend (don't wait for DB)
+  const segment = {
+    speakerId: participant_id || String(userId) || 'unknown',
+    speakerLabel: userName || `Speaker ${userId || 'Unknown'}`,
+    text: text || '',
+    tStartMs: timestamp_start || transcript.timestamp || 0,
+    tEndMs: timestamp_end || 0,
+    seqNo: sequence || Date.now(),
+  };
 
-    if (!meeting) {
-      // Create meeting if it doesn't exist
-      // Note: In production, this should be done when RTMS starts
-      // and should include proper owner/title info
-      meeting = await prisma.meeting.create({
-        data: {
-          zoomMeetingId: meetingId,
-          title: `Meeting ${meetingId}`,
-          startTime: new Date(),
-          status: 'ongoing',
-          ownerId: 'system', // Placeholder - should be actual user ID
-        },
-      });
-      console.log('✅ Created new meeting:', meeting.id);
-    }
+  // Broadcast to frontend immediately
+  await broadcastSegment(meetingId, segment);
+  console.log(`📤 Broadcast segment: "${(text || '').substring(0, 50)}..."`);
 
-    // Get or create speaker
-    let speaker = await prisma.speaker.findFirst({
-      where: {
-        meetingId: meeting.id,
-        zoomParticipantId: participant_id,
-      },
-    });
-
-    if (!speaker) {
-      const speakerCount = await prisma.speaker.count({
-        where: { meetingId: meeting.id },
-      });
-
-      speaker = await prisma.speaker.create({
-        data: {
-          meetingId: meeting.id,
-          zoomParticipantId: participant_id,
-          label: `Speaker ${speakerCount + 1}`,
-        },
-      });
-      console.log('✅ Created new speaker:', speaker.id);
-    }
-
-    // Create transcript segment (with idempotency check)
-    const existing = await prisma.transcriptSegment.findFirst({
-      where: {
-        meetingId: meeting.id,
-        seqNo: BigInt(sequence),
-      },
-    });
-
-    if (!existing) {
-      await prisma.transcriptSegment.create({
-        data: {
-          meetingId: meeting.id,
-          speakerId: speaker.id,
-          tStartMs: timestamp_start || 0,
-          tEndMs: timestamp_end || 0,
-          seqNo: BigInt(sequence),
-          text: text,
-          confidence: confidence || null,
-        },
-      });
-
-      console.log(`✅ Saved segment #${sequence}: "${text.substring(0, 50)}..."`);
-
-      // Broadcast to WebSocket clients
-      await broadcastSegment(meeting.id, {
-        speakerId: speaker.id,
-        speakerLabel: speaker.label,
-        text,
-        tStartMs: timestamp_start,
-        tEndMs: timestamp_end,
-        seqNo: sequence,
-      });
-    }
-
-  } catch (error) {
-    console.error('❌ Error handling transcript:', error);
-  }
+  // Database storage is optional for now - just log if it fails
+  // TODO: Implement proper meeting creation with user context
 }
 
 /**
@@ -259,11 +240,13 @@ async function handleTranscript(meetingId, transcript) {
  */
 async function broadcastSegment(meetingId, segment) {
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+    // Use Docker service name for inter-container communication
+    const backendUrl = process.env.BACKEND_URL || 'http://backend:3000';
     await axios.post(`${backendUrl}/api/rtms/broadcast`, {
       meetingId,
       segment,
     });
+    console.log('✅ Sent to backend for broadcast');
   } catch (error) {
     // Non-critical, just log
     console.warn('⚠️ Failed to broadcast segment:', error.message);
@@ -306,7 +289,7 @@ const PORT = process.env.RTMS_PORT || 3002;
 
 app.listen(PORT, () => {
   console.log('='.repeat(60));
-  console.log(`🎙️  Meeting Assistant RTMS Service`);
+  console.log(`🎙️  Arlo Meeting Assistant RTMS Service`);
   console.log('='.repeat(60));
   console.log(`Port: ${PORT}`);
   console.log(`Webhook: http://localhost:${PORT}/webhook`);

@@ -28,7 +28,7 @@ As a result, customers and partners lack the context and confidence needed to ad
     - Providing resources and storytelling that demonstrate RTMS’s value in real-world scenarios
 
 ```markdown
-# Meeting Assistant Starter Kit — App Spec
+# Arlo Meeting Assistant Starter Kit — App Spec
 
 Single source of truth for routes, UX, data, and APIs. Point your IDE/codegen at this doc for autocomplete context.
 

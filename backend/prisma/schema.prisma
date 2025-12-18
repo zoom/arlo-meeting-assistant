@@ -1,4 +1,4 @@
-// Prisma Schema for Meeting Assistant
+// Prisma Schema for Arlo Meeting Assistant
 // Database: PostgreSQL 15+
 
 generator client {

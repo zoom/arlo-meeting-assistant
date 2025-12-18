@@ -60,13 +60,37 @@ function App() {
 
         // Get meeting context (if in meeting)
         if (context === 'inMeeting') {
+          let meetingData = {};
+
+          // First get meeting UUID - this is what RTMS uses
+          try {
+            const uuidResponse = await zoomSdk.getMeetingUUID();
+            console.log('🎥 getMeetingUUID raw response:', uuidResponse);
+            console.log('🎥 getMeetingUUID typeof:', typeof uuidResponse);
+            if (uuidResponse) {
+              console.log('🎥 getMeetingUUID keys:', Object.keys(uuidResponse));
+            }
+            // Response should be { meetingUUID: "..." }
+            meetingData.meetingUUID = uuidResponse?.meetingUUID || uuidResponse;
+            console.log('🎥 Extracted meetingUUID:', meetingData.meetingUUID);
+          } catch (uuidErr) {
+            console.error('⚠️ getMeetingUUID failed:', uuidErr);
+            console.error('⚠️ getMeetingUUID error message:', uuidErr?.message);
+            console.error('⚠️ getMeetingUUID error code:', uuidErr?.code);
+          }
+
+          // Also get meeting context for topic/ID
           try {
             const meeting = await zoomSdk.getMeetingContext();
             console.log('🎥 Meeting Context:', meeting);
-            setMeetingContext(meeting);
+            meetingData = { ...meetingData, ...meeting };
           } catch (err) {
             console.warn('⚠️ Could not get meeting context:', err);
           }
+
+          console.log('🎥 Combined meeting data:', meetingData);
+          console.log('🎥 Final meetingUUID value:', meetingData.meetingUUID);
+          setMeetingContext(meetingData);
         }
 
       } catch (error) {

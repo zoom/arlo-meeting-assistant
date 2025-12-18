@@ -1,7 +1,7 @@
 {
-  "name": "meeting-assistant-rtms",
+  "name": "arlo-meeting-assistant-rtms",
   "version": "0.5.0",
-  "description": "RTMS transcript ingestion service",
+  "description": "Arlo - RTMS transcript ingestion service",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

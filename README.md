@@ -1,4 +1,4 @@
-# Meeting Assistant 📋
+# Arlo Meeting Assistant 📋
 
 > Open-source Zoom Apps meeting assistant with Real-Time Media Streams (RTMS) and AI - **No bot required!**
 
@@ -30,15 +30,15 @@
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/your-org/meeting-assistant.git
-cd meeting-assistant
+git clone https://github.com/your-org/arlo-meeting-assistant.git
+cd arlo-meeting-assistant
 ```
 
 ### 2. Create Zoom App
 
 1. Go to [Zoom App Marketplace](https://marketplace.zoom.us/)
 2. Click **Develop** → **Build App** → **General App**
-3. Name your app (e.g., "Meeting Assistant")
+3. Name your app (e.g., "Arlo Meeting Assistant")
 4. Note your **Client ID** and **Client Secret**
 
 ### 3. Configure Environment
@@ -114,7 +114,7 @@ npm run dev       # Start all services
 2. Click **Apps** → Find your app
 3. Click **Add App** (first time only)
 4. Authorize the app
-5. Click **"Start Meeting Assistant"**
+5. Click **"Start Arlo"**
 6. See live transcription appear!
 
 ---
@@ -139,7 +139,7 @@ Comprehensive guides available in [`/docs/`](./docs/):
 ┌─────────────────────────────────────────────────────────┐
 │                    Zoom Meeting                         │
 │  ┌──────────────────────────────────────────────────┐   │
-│  │  Meeting Assistant (React + Zoom SDK)            │   │
+│  │  Arlo Meeting Assistant (React + Zoom SDK)       │   │
 │  └────────────────────┬─────────────────────────────┘   │
 └─────────────────────────┼──────────────────────────────┘
                           │ HTTPS + WebSocket
@@ -170,7 +170,7 @@ Comprehensive guides available in [`/docs/`](./docs/):
 ### Project Structure
 
 ```
-meeting-assistant/
+arlo-meeting-assistant/
 ├── backend/          # Express API server
 │   ├── src/
 │   │   ├── server.js       # Main server
@@ -242,7 +242,7 @@ npx prisma migrate reset
 
 - [ ] App loads in Zoom client
 - [ ] OAuth flow completes
-- [ ] "Start Meeting Assistant" button works
+- [ ] "Start Arlo" button works
 - [ ] Live transcript appears within 1s
 - [ ] WebSocket connection stable
 - [ ] Segments save to database
@@ -322,8 +322,8 @@ MIT License - See [LICENSE](./LICENSE) for details
 
 ## 💬 Support
 
-- **Issues:** [GitHub Issues](https://github.com/your-org/meeting-assistant/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/your-org/meeting-assistant/discussions)
+- **Issues:** [GitHub Issues](https://github.com/your-org/arlo-meeting-assistant/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/your-org/arlo-meeting-assistant/discussions)
 - **Zoom Developer Forum:** [devforum.zoom.us](https://devforum.zoom.us/)
 
 ---
