@@ -1,4 +1,4 @@
-# Meeting Assistant - Project Status
+# Arlo Meeting Assistant - Project Status
 
 **Last Updated:** 2024-12-10
 **Project State:** 🚀 **Planning & Architecture Complete**
@@ -9,7 +9,7 @@
 ## 📋 Project Vision
 
 ### Goal
-Create an open-source "Meeting Assistant Starter Kit" that demonstrates how to build intelligent meeting assistants **as Zoom Apps** using Real-Time Media Streams (RTMS) - **without requiring a meeting bot**.
+Create an open-source "Arlo Meeting Assistant Starter Kit" that demonstrates how to build intelligent meeting assistants **as Zoom Apps** using Real-Time Media Streams (RTMS) - **without requiring a meeting bot**.
 
 ### Target Audience
 - Note-taking companies (Otter, Fireflies, etc.)
@@ -551,7 +551,7 @@ LIMIT 20;
 ## 🔗 Related Documentation
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture details
-- [Meeting Assistant Starter Kit.md](../Meeting%20Assistant%20Starter%20Kit.md) - Original requirements doc
+- [Arlo Meeting Assistant Starter Kit.md](../Arlo%20Meeting%20Assistant%20Starter%20Kit.md) - Original requirements doc
 
 **Once development starts, create:**
 - [ ] README.md - Quick start guide

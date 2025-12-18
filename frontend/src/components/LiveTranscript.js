@@ -43,7 +43,7 @@ function LiveTranscript({ ws, rtmsActive, meetingId }) {
   if (!rtmsActive) {
     return (
       <div className="transcript-empty">
-        <p>Start the Meeting Assistant to see live transcription</p>
+        <p>Start Arlo to see live transcription</p>
       </div>
     );
   }

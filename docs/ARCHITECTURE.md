@@ -1,4 +1,4 @@
-# Meeting Assistant Architecture
+# Arlo Meeting Assistant Architecture
 
 ## Executive Summary
 
@@ -26,7 +26,7 @@ This document outlines the architecture for a Zoom Apps-based meeting assistant 
 │                        Zoom Meeting                             │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Meeting Assistant Zoom App (React)                      │  │
+│  │  Arlo Meeting Assistant Zoom App (React)                 │  │
 │  │  - Live transcript display                               │  │
 │  │  - Real-time AI suggestions                              │  │
 │  │  - Meeting notes/highlights                              │  │

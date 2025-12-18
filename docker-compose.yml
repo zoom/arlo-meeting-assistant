@@ -4,7 +4,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: meeting-assistant-postgres
+    container_name: arlo-meeting-assistant-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -23,7 +23,7 @@ services:
   # Redis (optional, for WebSocket scaling)
   redis:
     image: redis:7-alpine
-    container_name: meeting-assistant-redis
+    container_name: arlo-meeting-assistant-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -42,7 +42,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: meeting-assistant-backend
+    container_name: arlo-meeting-assistant-backend
     restart: unless-stopped
     env_file:
       - .env
@@ -66,7 +66,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: meeting-assistant-frontend
+    container_name: arlo-meeting-assistant-frontend
     restart: unless-stopped
     environment:
       REACT_APP_API_URL: http://localhost:3000
@@ -91,7 +91,7 @@ services:
       platforms:
         - linux/amd64
     platform: linux/amd64
-    container_name: meeting-assistant-rtms
+    container_name: arlo-meeting-assistant-rtms
     restart: unless-stopped
     env_file:
       - .env

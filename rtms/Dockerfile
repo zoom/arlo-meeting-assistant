@@ -2,8 +2,14 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install OpenSSL for Prisma
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install OpenSSL for Prisma and CA certificates for RTMS TLS
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Create logs directory for RTMS SDK
+RUN mkdir -p /app/logs && chmod 777 /app/logs
+
+# Set CA certificate path for RTMS SDK
+ENV ZM_RTMS_CA=/etc/ssl/certs/ca-certificates.crt
 
 # Copy package files
 COPY package*.json ./

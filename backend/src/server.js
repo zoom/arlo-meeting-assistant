@@ -154,7 +154,7 @@ const PORT = config.port;
 
 server.listen(PORT, () => {
   console.log('='.repeat(60));
-  console.log(`🚀 Meeting Assistant Backend Server`);
+  console.log(`🚀 Arlo Meeting Assistant Backend Server`);
   console.log('='.repeat(60));
   console.log(`Environment: ${config.nodeEnv}`);
   console.log(`Port: ${PORT}`);

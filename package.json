@@ -1,7 +1,7 @@
 {
-  "name": "meeting-assistant",
+  "name": "arlo-meeting-assistant",
   "version": "0.5.0",
-  "description": "Open-source Zoom Apps meeting assistant with RTMS and AI",
+  "description": "Arlo - Open-source Zoom Apps meeting assistant with RTMS and AI",
   "private": true,
   "workspaces": [
     "backend",
@@ -29,7 +29,8 @@
     "zoom",
     "zoom-apps",
     "rtms",
-    "meeting-assistant",
+    "arlo",
+    "arlo-meeting-assistant",
     "transcription",
     "ai",
     "openrouter"

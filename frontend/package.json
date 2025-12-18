@@ -1,7 +1,7 @@
 {
-  "name": "meeting-assistant-frontend",
+  "name": "arlo-meeting-assistant-frontend",
   "version": "0.5.0",
-  "description": "Zoom App frontend for Meeting Assistant",
+  "description": "Zoom App frontend for Arlo Meeting Assistant",
   "private": true,
   "dependencies": {
     "react": "^18.2.0",
@@ -32,6 +32,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "proxy": "http://backend:3000"
+  }
 }
