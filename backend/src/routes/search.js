@@ -12,27 +12,28 @@ router.get('/', async (req, res) => {
   try {
     const { userId, q, meeting_id, from, to, limit = 20 } = req.query;
 
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    if (!q) {
+      return res.status(400).json({ error: 'Missing search query (q parameter)' });
     }
 
-    if (!q) {
-      return res.status(400).json({ error: 'Missing search query' });
-    }
+    console.log(`🔍 Searching for: "${q}"`);
 
     // Build where clause
     const where = {
-      meeting: {
-        ownerId: userId,
-        ...(meeting_id && { id: meeting_id }),
-        ...(from && { startTime: { gte: new Date(from) } }),
-        ...(to && { startTime: { lte: new Date(to) } }),
-      },
       text: {
         contains: q,
         mode: 'insensitive',
       },
     };
+
+    // Add optional filters
+    if (meeting_id || from || to || userId) {
+      where.meeting = {};
+      if (userId) where.meeting.ownerId = userId;
+      if (meeting_id) where.meeting.id = meeting_id;
+      if (from) where.meeting.startTime = { ...where.meeting.startTime, gte: new Date(from) };
+      if (to) where.meeting.startTime = { ...where.meeting.startTime, lte: new Date(to) };
+    }
 
     const segments = await prisma.transcriptSegment.findMany({
       where,
@@ -72,8 +73,8 @@ router.get('/', async (req, res) => {
         meetingDate: segment.meeting.startTime,
         segmentId: segment.id,
         speaker: segment.speaker?.displayName || segment.speaker?.label,
-        tStartMs: segment.tStartMs,
-        tEndMs: segment.tEndMs,
+        tStartMs: segment.tStartMs.toString(),
+        tEndMs: segment.tEndMs.toString(),
         text: segment.text,
         snippet,
       };
