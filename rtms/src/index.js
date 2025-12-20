@@ -231,8 +231,81 @@ async function handleTranscript(meetingId, transcript) {
   await broadcastSegment(meetingId, segment);
   console.log(`📤 Broadcast segment: "${(text || '').substring(0, 50)}..."`);
 
-  // Database storage is optional for now - just log if it fails
-  // TODO: Implement proper meeting creation with user context
+  // Save to database
+  try {
+    // Find or create meeting (without owner for now - RTMS doesn't have user context)
+    let meeting = await prisma.meeting.findFirst({
+      where: { zoomMeetingId: meetingId },
+    });
+
+    if (!meeting) {
+      // For RTMS-created meetings, we need a system user or skip the owner requirement
+      // First, try to find or create a system user
+      let systemUser = await prisma.user.findFirst({
+        where: { email: 'system@arlo.local' },
+      });
+
+      if (!systemUser) {
+        systemUser = await prisma.user.create({
+          data: {
+            zoomUserId: 'system',
+            email: 'system@arlo.local',
+            displayName: 'System',
+          },
+        });
+        console.log(`✅ Created system user: ${systemUser.id}`);
+      }
+
+      meeting = await prisma.meeting.create({
+        data: {
+          zoomMeetingId: meetingId,
+          title: `Meeting ${new Date().toLocaleDateString()}`,
+          startTime: new Date(),
+          status: 'ongoing',
+          ownerId: systemUser.id,
+        },
+      });
+      console.log(`✅ Created meeting: ${meeting.id}`);
+    }
+
+    // Find or create speaker using zoomParticipantId (correct schema field)
+    const participantId = segment.speakerId || 'unknown';
+    let speaker = await prisma.speaker.findFirst({
+      where: {
+        meetingId: meeting.id,
+        zoomParticipantId: participantId,
+      },
+    });
+
+    if (!speaker) {
+      speaker = await prisma.speaker.create({
+        data: {
+          meetingId: meeting.id,
+          zoomParticipantId: participantId,
+          label: segment.speakerLabel || `Speaker`,
+          displayName: segment.speakerLabel || userName || `Speaker`,
+        },
+      });
+      console.log(`✅ Created speaker: ${speaker.id}`);
+    }
+
+    // Save transcript segment
+    await prisma.transcriptSegment.create({
+      data: {
+        meetingId: meeting.id,
+        speakerId: speaker.id,
+        seqNo: BigInt(segment.seqNo),
+        text: segment.text,
+        tStartMs: BigInt(segment.tStartMs || 0),
+        tEndMs: BigInt(segment.tEndMs || segment.tStartMs || 0),
+      },
+    });
+    console.log(`✅ Saved segment to database`);
+
+  } catch (dbError) {
+    console.error('❌ Database save error:', dbError.message);
+    console.error('Stack:', dbError.stack);
+  }
 }
 
 /**

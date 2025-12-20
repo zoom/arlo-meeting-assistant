@@ -60,7 +60,7 @@ function LiveTranscript({ ws, rtmsActive, meetingId }) {
   return (
     <div className="live-transcript">
       <div className="transcript-header">
-        <span className="segment-count">{segments.length} segments</span>
+        <span className="transcript-count">{segments.length} lines</span>
         {!followLive && (
           <button
             className="resume-live"

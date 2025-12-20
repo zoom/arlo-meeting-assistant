@@ -6,21 +6,17 @@ const prisma = new PrismaClient();
 
 /**
  * GET /api/meetings
- * List user's meetings
+ * List user's meetings (or all meetings in dev mode)
  */
 router.get('/', async (req, res) => {
   try {
     const { userId, from, to, limit = 50, cursor } = req.query;
 
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const where = {
-      ownerId: userId,
-      ...(from && { startTime: { gte: new Date(from) } }),
-      ...(to && { startTime: { lte: new Date(to) } }),
-    };
+    // Build where clause - userId is optional for dev
+    const where = {};
+    if (userId) where.ownerId = userId;
+    if (from) where.startTime = { ...where.startTime, gte: new Date(from) };
+    if (to) where.startTime = { ...where.startTime, lte: new Date(to) };
 
     const meetings = await prisma.meeting.findMany({
       where,
@@ -59,11 +55,12 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
     const { userId } = req.query;
 
+    // Build where clause - userId is optional for dev
+    const where = { id };
+    if (userId) where.ownerId = userId;
+
     const meeting = await prisma.meeting.findFirst({
-      where: {
-        id,
-        ownerId: userId,
-      },
+      where,
       include: {
         speakers: true,
         highlights: true,
@@ -95,9 +92,13 @@ router.get('/:id/transcript', async (req, res) => {
     const { id } = req.params;
     const { userId, from_ms, to_ms, limit = 100, after_seq } = req.query;
 
-    // Verify meeting ownership
+    // Build where clause - userId is optional for dev
+    const meetingWhere = { id };
+    if (userId) meetingWhere.ownerId = userId;
+
+    // Verify meeting exists
     const meeting = await prisma.meeting.findFirst({
-      where: { id, ownerId: userId },
+      where: meetingWhere,
     });
 
     if (!meeting) {
@@ -120,8 +121,14 @@ router.get('/:id/transcript', async (req, res) => {
       take: parseInt(limit),
     });
 
+    // Convert BigInt to string for JSON serialization
+    const serializedSegments = segments.map(seg => ({
+      ...seg,
+      seqNo: seg.seqNo.toString(),
+    }));
+
     res.json({
-      segments,
+      segments: serializedSegments,
       cursor: segments.length > 0 ? segments[segments.length - 1].seqNo.toString() : null,
     });
   } catch (error) {
@@ -129,6 +136,97 @@ router.get('/:id/transcript', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch transcript' });
   }
 });
+
+/**
+ * PATCH /api/meetings/:id
+ * Update meeting (rename, etc.)
+ */
+router.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title } = req.body;
+
+    if (!title || title.trim().length === 0) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const meeting = await prisma.meeting.update({
+      where: { id },
+      data: { title: title.trim() },
+    });
+
+    res.json({ meeting });
+  } catch (error) {
+    console.error('Update meeting error:', error);
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+    res.status(500).json({ error: 'Failed to update meeting' });
+  }
+});
+
+/**
+ * GET /api/meetings/:id/vtt
+ * Export meeting transcript as WebVTT file
+ */
+router.get('/:id/vtt', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get meeting with segments
+    const meeting = await prisma.meeting.findUnique({
+      where: { id },
+      include: {
+        segments: {
+          orderBy: { seqNo: 'asc' },
+          include: { speaker: true },
+        },
+      },
+    });
+
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+
+    if (meeting.segments.length === 0) {
+      return res.status(400).json({ error: 'No transcript available' });
+    }
+
+    // Generate WebVTT content
+    let vtt = 'WEBVTT\n\n';
+
+    meeting.segments.forEach((segment, index) => {
+      const startTime = formatVTTTime(Number(segment.tStartMs));
+      const endTime = formatVTTTime(Number(segment.tEndMs) || Number(segment.tStartMs) + 5000);
+      const speaker = segment.speaker?.displayName || segment.speaker?.label || 'Speaker';
+
+      vtt += `${index + 1}\n`;
+      vtt += `${startTime} --> ${endTime}\n`;
+      vtt += `<v ${speaker}>${segment.text}\n\n`;
+    });
+
+    // Set headers for file download
+    const filename = `${meeting.title.replace(/[^a-z0-9]/gi, '_')}_transcript.vtt`;
+    res.setHeader('Content-Type', 'text/vtt');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(vtt);
+  } catch (error) {
+    console.error('VTT export error:', error);
+    res.status(500).json({ error: 'Failed to export transcript' });
+  }
+});
+
+/**
+ * Helper: Format milliseconds to VTT timestamp (HH:MM:SS.mmm)
+ */
+function formatVTTTime(ms) {
+  const hours = Math.floor(ms / 3600000);
+  const minutes = Math.floor((ms % 3600000) / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  const milliseconds = ms % 1000;
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+}
 
 /**
  * DELETE /api/meetings/:id
@@ -139,10 +237,11 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     const { userId } = req.query;
 
-    // Verify ownership
-    const meeting = await prisma.meeting.findFirst({
-      where: { id, ownerId: userId },
-    });
+    // Verify ownership (optional in dev mode)
+    const where = { id };
+    if (userId) where.ownerId = userId;
+
+    const meeting = await prisma.meeting.findFirst({ where });
 
     if (!meeting) {
       return res.status(404).json({ error: 'Meeting not found' });

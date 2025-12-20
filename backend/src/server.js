@@ -70,6 +70,7 @@ app.use('/api/meetings', require('./routes/meetings'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/rtms', require('./routes/rtms'));
+app.use('/api/highlights', require('./routes/highlights'));
 
 // Proxy all non-API requests to frontend (for Zoom App)
 app.use((req, res, next) => {

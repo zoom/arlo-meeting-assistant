@@ -3,6 +3,7 @@
   "version": "0.5.0",
   "description": "Zoom App frontend for Arlo Meeting Assistant",
   "private": true,
+  "proxy": "http://backend:3000",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -1,17 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import ZoomApp from './components/ZoomApp';
+import TestPage from './components/TestPage';
 
 const zoomSdk = window.zoomSdk;
 
+// Check if running outside Zoom (for testing)
+const isTestMode = !zoomSdk || window.location.search.includes('test=true');
+
 function App() {
-  const [sdkConfigured, setSdkConfigured] = useState(false);
+  const [sdkConfigured, setSdkConfigured] = useState(isTestMode);
   const [sdkError, setError] = useState(null);
   const [runningContext, setRunningContext] = useState(null);
   const [meetingContext, setMeetingContext] = useState(null);
   const [userContext, setUserContext] = useState(null);
 
   useEffect(() => {
+    // If in test mode, skip SDK configuration
+    if (isTestMode) {
+      console.log('🧪 Running in test mode (outside Zoom)');
+      return;
+    }
+
     async function configureSdk() {
       try {
         console.log('🚀 Initializing Zoom Apps SDK...');
@@ -102,12 +112,11 @@ function App() {
     configureSdk();
   }, []);
 
-  if (sdkError) {
+  // Show test page when running outside Zoom (or when SDK fails)
+  if (isTestMode || sdkError) {
     return (
-      <div className="error-container">
-        <h1>❌ SDK Error</h1>
-        <p>{sdkError}</p>
-        <p>Please check the console for more details.</p>
+      <div className="App">
+        <TestPage />
       </div>
     );
   }

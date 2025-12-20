@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import './ZoomApp.css';
 import LiveTranscript from './LiveTranscript';
 import RTMSControls from './RTMSControls';
+import AIPanel from './AIPanel';
+import MeetingSuggestions from './MeetingSuggestions';
+import MeetingHistory from './MeetingHistory';
 
 const zoomSdk = window.zoomSdk;
 
@@ -10,6 +13,7 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
   const [user, setUser] = useState(null);
   const [rtmsActive, setRtmsActive] = useState(false);
   const [rtmsLoading, setRtmsLoading] = useState(false);
+  const [rtmsStartTime, setRtmsStartTime] = useState(null);
   const [ws, setWs] = useState(null);
 
   // Authenticate user
@@ -194,6 +198,7 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
 
       console.log('✅ RTMS started, result:', result);
       setRtmsActive(true);
+      setRtmsStartTime(Date.now());
 
       await zoomSdk.showNotification({
         type: 'success',
@@ -227,6 +232,7 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
 
       console.log('✅ RTMS stopped, result:', result);
       setRtmsActive(false);
+      setRtmsStartTime(null);
 
       await zoomSdk.showNotification({
         type: 'info',
@@ -300,11 +306,22 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
         onStop={stopRTMS}
       />
 
+      <MeetingSuggestions
+        rtmsActive={rtmsActive}
+        rtmsStartTime={rtmsStartTime}
+        meetingId={meetingContext?.meetingUUID}
+        scheduledDuration={meetingContext?.scheduledDuration}
+      />
+
       <LiveTranscript
         ws={ws}
         rtmsActive={rtmsActive}
         meetingId={meetingContext?.meetingUUID}
       />
+
+      <AIPanel meetingId={meetingContext?.meetingUUID} />
+
+      <MeetingHistory />
     </div>
   );
 }
