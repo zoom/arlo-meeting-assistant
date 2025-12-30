@@ -1,4 +1,14 @@
-# Arlo Meeting Assistant 📋
+<div align="center">
+
+<img src="./docs/assets/arlo-the-owl.png" alt="Arlo the Owl" width="200"/>
+
+# Arlo Meeting Assistant 🦉
+
+**Your intelligent meeting companion that lives inside Zoom**
+
+</div>
+
+---
 
 Arlo is a forkable, open-source **RTMS Meeting Assistant** that showcases how developers can build real-time, intelligent meeting experiences directly inside Zoom — **no meeting bot required!**
 

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/YOUR_USERNAME/arlo-meeting-assistant/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 📚 Documentation
+    url: https://github.com/YOUR_USERNAME/arlo-meeting-assistant/tree/main/docs
+    about: Read the comprehensive documentation guides
+  - name: 🐛 Troubleshooting Guide
+    url: https://github.com/YOUR_USERNAME/arlo-meeting-assistant/blob/main/docs/TROUBLESHOOTING.md
+    about: Common issues and solutions

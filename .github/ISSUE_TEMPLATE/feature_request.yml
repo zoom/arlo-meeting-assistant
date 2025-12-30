@@ -1,0 +1,114 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for Arlo Meeting Assistant
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please fill out the form below to help us understand your idea.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem? Please describe.
+      placeholder: "Example: I'm always frustrated when I can't search for specific speakers across all meetings..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see.
+      placeholder: "Example: Add a speaker filter to the global search feature that allows filtering by speaker name..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered.
+      placeholder: "Example: I considered using the existing search and manually filtering results, but it's time-consuming..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the system would this feature affect?
+      multiple: true
+      options:
+        - Backend API
+        - Frontend (Zoom App)
+        - RTMS Ingestion
+        - Database
+        - AI Features
+        - Documentation
+        - DevOps/Deployment
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority (Your Opinion)
+      description: How important is this feature to you?
+      options:
+        - Low - Nice to have
+        - Medium - Would improve my workflow
+        - High - Critical for my use case
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Describe your specific use case for this feature.
+      placeholder: "Example: As a product manager, I review meeting transcripts weekly and need to quickly find all action items assigned to specific team members..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: Mockups or Examples
+      description: If applicable, add mockups, diagrams, or examples from other apps.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, links, or references about the feature request.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Would you be willing to contribute to this feature?
+      options:
+        - label: I would be willing to implement this feature myself
+        - label: I would be willing to help test this feature
+        - label: I would be willing to write documentation for this feature
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues to ensure this hasn't been requested before
+          required: true
+        - label: I have checked the roadmap to see if this is already planned
+          required: true

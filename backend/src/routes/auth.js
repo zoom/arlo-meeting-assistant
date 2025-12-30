@@ -113,11 +113,22 @@ router.post('/callback', async (req, res) => {
       },
     });
 
-    // Generate JWT for WebSocket auth
-    const wsToken = generateToken({
+    // Generate JWT for session (24 hours)
+    const sessionToken = generateToken({
       userId: user.id,
       zoomUserId: user.zoomUserId,
       exp: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+    });
+
+    // Generate JWT for WebSocket auth (same token, but also returned for WS connections)
+    const wsToken = sessionToken;
+
+    // Set httpOnly cookie for session management
+    res.cookie('sessionToken', sessionToken, {
+      httpOnly: true,
+      secure: config.nodeEnv === 'production', // HTTPS only in production
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
     });
 
     res.json({
@@ -128,7 +139,7 @@ router.post('/callback', async (req, res) => {
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
       },
-      wsToken,
+      wsToken, // Still return for WebSocket connections
       expiresAt: expiresAt.toISOString(),
     });
   } catch (error) {
@@ -146,15 +157,18 @@ router.post('/callback', async (req, res) => {
  */
 router.get('/me', async (req, res) => {
   try {
-    // TODO: Add session/JWT middleware
-    const { userId } = req.query;
+    const { requireAuth, devAuthBypass } = require('../middleware/auth');
 
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    // Apply auth middleware
+    await new Promise((resolve, reject) => {
+      requireAuth(req, res, (err) => {
+        if (err) return reject(err);
+        devAuthBypass(req, res, resolve);
+      });
+    });
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: req.user.id },
       select: {
         id: true,
         zoomUserId: true,
@@ -172,6 +186,9 @@ router.get('/me', async (req, res) => {
     res.json({ user });
   } catch (error) {
     console.error('Get user error:', error);
+    if (error.message === 'Unauthorized') {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     res.status(500).json({ error: 'Failed to get user' });
   }
 });
@@ -256,20 +273,34 @@ router.post('/refresh', async (req, res) => {
  */
 router.post('/logout', async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { requireAuth, devAuthBypass } = require('../middleware/auth');
 
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId' });
-    }
+    // Apply auth middleware
+    await new Promise((resolve, reject) => {
+      requireAuth(req, res, (err) => {
+        if (err) return reject(err);
+        devAuthBypass(req, res, resolve);
+      });
+    });
 
-    // Delete user tokens
+    // Delete user tokens from database
     await prisma.userToken.deleteMany({
-      where: { userId },
+      where: { userId: req.user.id },
+    });
+
+    // Clear session cookie
+    res.clearCookie('sessionToken', {
+      httpOnly: true,
+      secure: config.nodeEnv === 'production',
+      sameSite: 'strict',
     });
 
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
     console.error('Logout error:', error);
+    if (error.message === 'Unauthorized') {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     res.status(500).json({ error: 'Failed to logout' });
   }
 });

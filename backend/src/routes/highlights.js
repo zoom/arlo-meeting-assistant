@@ -1,8 +1,13 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { requireAuth, devAuthBypass } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// Apply auth middleware to all routes
+router.use(requireAuth);
+router.use(devAuthBypass); // Allow dev mode query param bypass
 
 /**
  * GET /api/highlights
@@ -14,6 +19,18 @@ router.get('/', async (req, res) => {
 
     if (!meetingId) {
       return res.status(400).json({ error: 'meetingId is required' });
+    }
+
+    // Verify meeting belongs to authenticated user
+    const meeting = await prisma.meeting.findFirst({
+      where: {
+        id: meetingId,
+        ownerId: req.user.id,
+      },
+    });
+
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
     }
 
     const highlights = await prisma.highlight.findMany({
@@ -40,25 +57,22 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'meetingId and title are required' });
     }
 
-    // Get or create a system user for dev mode
-    let systemUser = await prisma.user.findFirst({
-      where: { email: 'system@arlo.local' },
+    // Verify meeting belongs to authenticated user
+    const meeting = await prisma.meeting.findFirst({
+      where: {
+        id: meetingId,
+        ownerId: req.user.id,
+      },
     });
 
-    if (!systemUser) {
-      systemUser = await prisma.user.create({
-        data: {
-          zoomUserId: 'system',
-          email: 'system@arlo.local',
-          displayName: 'System',
-        },
-      });
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
     }
 
     const highlight = await prisma.highlight.create({
       data: {
         meetingId,
-        userId: systemUser.id,
+        userId: req.user.id, // Use authenticated user
         title,
         notes: notes || null,
         tStartMs: tStartMs || 0,
@@ -82,6 +96,18 @@ router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { title, notes, tags } = req.body;
+
+    // Verify highlight belongs to authenticated user
+    const existingHighlight = await prisma.highlight.findFirst({
+      where: {
+        id,
+        userId: req.user.id,
+      },
+    });
+
+    if (!existingHighlight) {
+      return res.status(404).json({ error: 'Highlight not found' });
+    }
 
     const updateData = {};
     if (title !== undefined) updateData.title = title;
@@ -110,6 +136,18 @@ router.patch('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Verify highlight belongs to authenticated user
+    const existingHighlight = await prisma.highlight.findFirst({
+      where: {
+        id,
+        userId: req.user.id,
+      },
+    });
+
+    if (!existingHighlight) {
+      return res.status(404).json({ error: 'Highlight not found' });
+    }
 
     await prisma.highlight.delete({
       where: { id },
