@@ -1,20 +1,26 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { requireAuth, devAuthBypass } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
+// Apply auth middleware to all routes
+router.use(requireAuth);
+router.use(devAuthBypass); // Allow dev mode query param bypass
+
 /**
  * GET /api/meetings
- * List user's meetings (or all meetings in dev mode)
+ * List user's meetings
  */
 router.get('/', async (req, res) => {
   try {
-    const { userId, from, to, limit = 50, cursor } = req.query;
+    const { from, to, limit = 50, cursor } = req.query;
 
-    // Build where clause - userId is optional for dev
-    const where = {};
-    if (userId) where.ownerId = userId;
+    // Build where clause - always filter by authenticated user
+    const where = {
+      ownerId: req.user.id,
+    };
     if (from) where.startTime = { ...where.startTime, gte: new Date(from) };
     if (to) where.startTime = { ...where.startTime, lte: new Date(to) };
 
@@ -53,11 +59,12 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId } = req.query;
 
-    // Build where clause - userId is optional for dev
-    const where = { id };
-    if (userId) where.ownerId = userId;
+    // Build where clause - always filter by authenticated user
+    const where = {
+      id,
+      ownerId: req.user.id,
+    };
 
     const meeting = await prisma.meeting.findFirst({
       where,
@@ -90,11 +97,13 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/transcript', async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId, from_ms, to_ms, limit = 100, after_seq } = req.query;
+    const { from_ms, to_ms, limit = 100, after_seq } = req.query;
 
-    // Build where clause - userId is optional for dev
-    const meetingWhere = { id };
-    if (userId) meetingWhere.ownerId = userId;
+    // Build where clause - always filter by authenticated user
+    const meetingWhere = {
+      id,
+      ownerId: req.user.id,
+    };
 
     // Verify meeting exists
     const meeting = await prisma.meeting.findFirst({
@@ -235,11 +244,12 @@ function formatVTTTime(ms) {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId } = req.query;
 
-    // Verify ownership (optional in dev mode)
-    const where = { id };
-    if (userId) where.ownerId = userId;
+    // Verify ownership - always filter by authenticated user
+    const where = {
+      id,
+      ownerId: req.user.id,
+    };
 
     const meeting = await prisma.meeting.findFirst({ where });
 

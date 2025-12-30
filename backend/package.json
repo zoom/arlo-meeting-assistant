@@ -15,6 +15,7 @@
   "dependencies": {
     "@prisma/client": "^5.8.0",
     "axios": "^1.6.5",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.3.1",
