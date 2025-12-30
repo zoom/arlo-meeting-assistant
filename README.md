@@ -23,6 +23,22 @@ Arlo is designed to help developers quickly prototype and deploy their own meeti
 
 ---
 
+## ⚠️ **IMPORTANT: RTMS Access Required**
+
+> **This app requires RTMS (Real-Time Media Streams) access to function.** RTMS is Zoom's API for accessing live meeting audio and transcription data without requiring a bot in the meeting.
+
+**To get RTMS access:**
+
+1. **Request a Free Trial** - Post in the [Zoom Developer Forum](https://devforum.zoom.us/) requesting RTMS access for development
+2. **Include your use case** - Mention you're building a meeting assistant with Arlo
+3. **Wait for approval** - The Zoom team will enable RTMS on your account (usually within 1-2 business days)
+
+**Without RTMS access, this application will not work.** The entire purpose of this starter kit is to demonstrate the power of RTMS for building real-time meeting intelligence.
+
+✅ Once approved, you'll see **RTMS features** available in your Zoom App Marketplace settings.
+
+---
+
 ## ✨ Features
 
 - 📝 **Live Transcription** - Real-time captions via RTMS (< 1s latency)
@@ -43,6 +59,7 @@ Arlo is designed to help developers quickly prototype and deploy their own meeti
 - **Docker** + Docker Compose ([Download](https://www.docker.com/))
 - **ngrok** ([Download](https://ngrok.com/))
 - **Zoom Account** with Marketplace access
+- **🔴 RTMS Access** - **REQUIRED!** Request via [Zoom Developer Forum](https://devforum.zoom.us/)
 
 ### 1. Clone Repository
 
@@ -51,14 +68,36 @@ git clone https://github.com/your-org/arlo-meeting-assistant.git
 cd arlo-meeting-assistant
 ```
 
-### 2. Create Zoom App
+### 2. Request RTMS Access (Critical!)
+
+**This step is required before you can use RTMS features:**
+
+1. Go to [Zoom Developer Forum](https://devforum.zoom.us/)
+2. Create a new post with the title: **"Request RTMS Access for Meeting Assistant Development"**
+3. In your post, include:
+   ```
+   Hi Zoom team,
+
+   I'm building a meeting assistant using the Arlo Meeting Assistant starter kit
+   and would like to request RTMS access for development and testing.
+
+   Account email: [your-zoom-email@example.com]
+   Use case: Building a real-time meeting assistant with live transcription
+   App name: [Your App Name]
+
+   Thank you!
+   ```
+4. **Wait for approval** (usually 1-2 business days)
+5. Once approved, RTMS features will appear in your Zoom App settings
+
+### 3. Create Zoom App
 
 1. Go to [Zoom App Marketplace](https://marketplace.zoom.us/)
 2. Click **Develop** → **Build App** → **General App**
 3. Name your app (e.g., "Arlo Meeting Assistant")
 4. Note your **Client ID** and **Client Secret**
 
-### 3. Configure Environment
+### 4. Configure Environment
 
 ```bash
 # Copy example environment file
@@ -75,7 +114,7 @@ node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"  # REDI
 # - REDIS_ENCRYPTION_KEY (generated above)
 ```
 
-### 4. Start ngrok
+### 5. Start ngrok
 
 ```bash
 ngrok http 3000
@@ -83,7 +122,7 @@ ngrok http 3000
 
 Copy the `https://` URL (e.g., `https://abc123.ngrok-free.app`)
 
-### 5. Update Zoom App Configuration
+### 6. Update Zoom App Configuration
 
 In Zoom Marketplace → Your App:
 
@@ -93,24 +132,48 @@ In Zoom Marketplace → Your App:
 
 **Features → Zoom App SDK:**
 - Add all required APIs (see [CLAUDE.md](./CLAUDE.md#required-capabilities))
-- Enable RTMS → Transcripts
+- ⚠️ **Enable RTMS → Transcripts** (requires RTMS access approval)
+- Optional: Enable RTMS → Audio (for advanced features)
 
 **Features → Surface:**
 - Home URL: `https://your-ngrok-url.ngrok-free.app`
 - Add to Domain Allow List: `https://your-ngrok-url.ngrok-free.app`
 
 **Event Subscriptions:**
-- Add endpoint: `https://your-ngrok-url.ngrok-free.app/rtms/webhook`
+- Add endpoint: `https://your-ngrok-url.ngrok-free.app/api/rtms/webhook`
 - Subscribe to: `meeting.rtms_started`, `meeting.rtms_stopped`
 
-### 6. Update .env with ngrok URL
+**⚡ Optional: Auto-Start RTMS**
+
+To automatically start RTMS when meetings begin (without requiring users to click a button):
+
+1. In **Features → Event Subscriptions**, also subscribe to:
+   - `meeting.participant_joined` (to detect when you join a meeting)
+
+2. In your backend code (`backend/src/routes/rtms.js`), add a webhook handler:
+   ```javascript
+   // Auto-start RTMS when participant joins
+   if (event === 'meeting.participant_joined') {
+     const { meeting_uuid, participant } = payload;
+     // Check if this is the app user
+     if (participant.id === appUserId) {
+       await startRTMS(meeting_uuid);
+     }
+   }
+   ```
+
+3. **Trade-off:** Auto-start provides seamless UX but uses more RTMS quota. Manual start (current implementation) gives users control.
+
+**Note:** The current implementation uses manual start (user clicks "Start Arlo") for better control and transparency.
+
+### 7. Update .env with ngrok URL
 
 ```bash
 # Edit .env
 PUBLIC_URL=https://your-ngrok-url.ngrok-free.app
 ```
 
-### 7. Start Application
+### 8. Start Application
 
 ```bash
 # Install root dependencies
@@ -125,7 +188,7 @@ npm run db:migrate  # Run database migrations
 npm run dev       # Start all services
 ```
 
-### 8. Test in Zoom
+### 9. Test in Zoom
 
 1. Start or join a Zoom meeting
 2. Click **Apps** → Find your app
@@ -341,7 +404,8 @@ MIT License - See [LICENSE](./LICENSE) for details
 
 - **Issues:** [GitHub Issues](https://github.com/your-org/arlo-meeting-assistant/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/your-org/arlo-meeting-assistant/discussions)
-- **Zoom Developer Forum:** [devforum.zoom.us](https://devforum.zoom.us/)
+- **RTMS Access Requests:** [Zoom Developer Forum](https://devforum.zoom.us/) - Post here to request free RTMS trial
+- **General Zoom Support:** [devforum.zoom.us](https://devforum.zoom.us/)
 
 ---
 
