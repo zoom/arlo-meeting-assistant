@@ -57,9 +57,11 @@ Arlo is designed to help developers quickly prototype and deploy their own meeti
 
 - **Node.js** 20+ ([Download](https://nodejs.org/))
 - **Docker** + Docker Compose ([Download](https://www.docker.com/))
-- **ngrok** ([Download](https://ngrok.com/))
+- **ngrok** account + CLI ([Sign up free](https://ngrok.com/)) - Exposes localhost to internet for webhooks
 - **Zoom Account** with Marketplace access
 - **🔴 RTMS Access** - **REQUIRED!** Request via [Zoom Developer Forum](https://devforum.zoom.us/)
+
+**💡 Recommended:** Create a free ngrok account to get a static domain - makes webhook testing much easier!
 
 ### 1. Clone Repository
 
@@ -114,17 +116,68 @@ node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"  # REDI
 # - REDIS_ENCRYPTION_KEY (generated above)
 ```
 
-### 5. Start ngrok
+### 5. Set Up ngrok (Expose Local Server to Internet)
+
+ngrok creates a secure tunnel from the internet to your local development server, which is required for Zoom webhooks and OAuth callbacks.
+
+**First Time Setup:**
+
+1. **Create a free ngrok account** at [ngrok.com](https://ngrok.com/)
+2. **Install ngrok** (if not already installed):
+   ```bash
+   # macOS (Homebrew)
+   brew install ngrok
+
+   # Or download from https://ngrok.com/download
+   ```
+
+3. **Authenticate ngrok** with your account:
+   ```bash
+   ngrok config add-authtoken YOUR_AUTHTOKEN
+   ```
+   (Find your authtoken at https://dashboard.ngrok.com/get-started/your-authtoken)
+
+**🎯 Recommended: Use a Static Domain (FREE!)**
+
+ngrok now offers **free static domains** that don't change between restarts. This makes webhook configuration much easier since you won't need to update your Zoom App settings every time you restart ngrok.
+
+1. **Claim your free static domain:**
+   - Go to https://dashboard.ngrok.com/domains
+   - Click **"Create Domain"** or **"New Domain"**
+   - You'll get a permanent domain like: `yourname-arlo.ngrok-free.app`
+
+2. **Start ngrok with your static domain:**
+   ```bash
+   ngrok http 3000 --domain=yourname-arlo.ngrok-free.app
+   ```
+
+3. **Benefits:**
+   - ✅ Same URL every time you restart ngrok
+   - ✅ Configure Zoom webhooks once (no need to update)
+   - ✅ Easier testing workflow
+   - ✅ 100% free for development
+
+**Alternative: Use Random Domain (Changes Each Time)**
+
+If you prefer not to create an account or want a temporary setup:
 
 ```bash
 ngrok http 3000
 ```
 
-Copy the `https://` URL (e.g., `https://abc123.ngrok-free.app`)
+Copy the `https://` URL from the ngrok output (e.g., `https://abc123.ngrok-free.app`)
+
+⚠️ **Note:** This URL changes every time you restart ngrok, requiring you to update all Zoom App webhook URLs each time.
+
+**Verify ngrok is running:**
+
+Open your ngrok URL in a browser - you should see the Arlo frontend once the app is running.
 
 ### 6. Update Zoom App Configuration
 
 In Zoom Marketplace → Your App:
+
+**Replace `your-ngrok-url.ngrok-free.app` below with your actual ngrok domain:**
 
 **Basic Information:**
 - OAuth Redirect URL: `https://your-ngrok-url.ngrok-free.app/api/auth/callback`
@@ -139,9 +192,14 @@ In Zoom Marketplace → Your App:
 - Home URL: `https://your-ngrok-url.ngrok-free.app`
 - Add to Domain Allow List: `https://your-ngrok-url.ngrok-free.app`
 
-**Event Subscriptions:**
-- Add endpoint: `https://your-ngrok-url.ngrok-free.app/api/rtms/webhook`
-- Subscribe to: `meeting.rtms_started`, `meeting.rtms_stopped`
+**Event Subscriptions (Important for RTMS!):**
+- Event notification endpoint URL: `https://your-ngrok-url.ngrok-free.app/api/rtms/webhook`
+- Subscribe to events:
+  - ✅ `meeting.rtms_started` - Notifies when RTMS successfully starts
+  - ✅ `meeting.rtms_stopped` - Notifies when RTMS ends
+- **Copy your webhook URL** from the "Event notification endpoint URL" field - you'll need this for testing
+
+**💡 Pro Tip:** If you're using a static ngrok domain, you only need to configure these webhooks once! With random domains, you'd need to update this URL every time you restart ngrok.
 
 **⚡ Optional: Auto-Start RTMS**
 
