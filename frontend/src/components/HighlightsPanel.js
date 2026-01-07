@@ -17,7 +17,9 @@ function HighlightsPanel({ meetingId }) {
   const fetchHighlights = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/highlights?meetingId=${meetingId}`);
+      const response = await fetch(`/api/highlights?meetingId=${meetingId}`, {
+        credentials: 'include', // Include cookies for authentication
+      });
       const data = await response.json();
       setHighlights(data.highlights || []);
     } catch (err) {
@@ -36,6 +38,7 @@ function HighlightsPanel({ meetingId }) {
       const response = await fetch('/api/highlights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({
           meetingId,
           title: newHighlight.title,
@@ -62,6 +65,7 @@ function HighlightsPanel({ meetingId }) {
     try {
       const response = await fetch(`/api/highlights/${id}`, {
         method: 'DELETE',
+        credentials: 'include', // Include cookies for authentication
       });
 
       if (response.ok) {

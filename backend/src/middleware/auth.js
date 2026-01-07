@@ -7,6 +7,11 @@ const config = require('../config');
  */
 function requireAuth(req, res, next) {
   try {
+    // Skip if req.user was already set (e.g., by devAuthBypass)
+    if (req.user) {
+      return next();
+    }
+
     // Get token from httpOnly cookie
     const token = req.cookies?.sessionToken;
 
