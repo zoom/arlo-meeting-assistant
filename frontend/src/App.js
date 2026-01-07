@@ -71,35 +71,59 @@ function App() {
         // Get meeting context (if in meeting)
         if (context === 'inMeeting') {
           let meetingData = {};
+          let meetingUUID = null;
 
-          // First get meeting UUID - this is what RTMS uses
+          // Try multiple methods to get meeting UUID
+          // Method 1: getMeetingUUID() - primary method
           try {
             const uuidResponse = await zoomSdk.getMeetingUUID();
             console.log('🎥 getMeetingUUID raw response:', uuidResponse);
             console.log('🎥 getMeetingUUID typeof:', typeof uuidResponse);
+
             if (uuidResponse) {
               console.log('🎥 getMeetingUUID keys:', Object.keys(uuidResponse));
+
+              // Try different response formats
+              meetingUUID = uuidResponse?.meetingUUID || // { meetingUUID: "xxx" }
+                           uuidResponse?.uuid ||         // { uuid: "xxx" }
+                           (typeof uuidResponse === 'string' ? uuidResponse : null); // "xxx"
             }
-            // Response should be { meetingUUID: "..." }
-            meetingData.meetingUUID = uuidResponse?.meetingUUID || uuidResponse;
-            console.log('🎥 Extracted meetingUUID:', meetingData.meetingUUID);
+
+            console.log('🎥 Extracted meetingUUID from getMeetingUUID:', meetingUUID);
           } catch (uuidErr) {
             console.error('⚠️ getMeetingUUID failed:', uuidErr);
-            console.error('⚠️ getMeetingUUID error message:', uuidErr?.message);
-            console.error('⚠️ getMeetingUUID error code:', uuidErr?.code);
+            console.error('⚠️ Error details:', uuidErr?.message, uuidErr?.code);
           }
 
-          // Also get meeting context for topic/ID
+          // Method 2: getMeetingContext() - fallback method
           try {
             const meeting = await zoomSdk.getMeetingContext();
             console.log('🎥 Meeting Context:', meeting);
+
+            // Try to extract UUID from meeting context if we don't have it yet
+            if (!meetingUUID && meeting) {
+              meetingUUID = meeting.meetingUUID ||
+                           meeting.meetingId ||
+                           meeting.uuid ||
+                           meeting.id;
+              console.log('🎥 Extracted meetingUUID from getMeetingContext:', meetingUUID);
+            }
+
             meetingData = { ...meetingData, ...meeting };
           } catch (err) {
             console.warn('⚠️ Could not get meeting context:', err);
           }
 
-          console.log('🎥 Combined meeting data:', meetingData);
-          console.log('🎥 Final meetingUUID value:', meetingData.meetingUUID);
+          // Set the extracted UUID
+          if (meetingUUID) {
+            meetingData.meetingUUID = meetingUUID;
+            console.log('✅ Final meetingUUID:', meetingUUID);
+          } else {
+            console.error('❌ CRITICAL: Could not extract meeting UUID from any SDK method!');
+            console.error('❌ Available data:', meetingData);
+          }
+
+          console.log('🎥 Final meeting data:', meetingData);
           setMeetingContext(meetingData);
         }
 

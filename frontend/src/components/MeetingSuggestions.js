@@ -4,7 +4,7 @@ import './MeetingSuggestions.css';
 const DEFAULT_DURATION_MIN = 60; // Default meeting duration in minutes
 const SUGGESTION_THRESHOLD = 0.80; // Show suggestions at 80% of meeting duration
 
-function MeetingSuggestions({ rtmsActive, rtmsStartTime, meetingId, scheduledDuration }) {
+function MeetingSuggestions({ rtmsActive, meetingStartTime, meetingId, scheduledDuration }) {
   const [suggestions, setSuggestions] = useState([]);
   const [dismissed, setDismissed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -16,20 +16,22 @@ function MeetingSuggestions({ rtmsActive, rtmsStartTime, meetingId, scheduledDur
   const meetingDurationMs = (customDuration || scheduledDuration || DEFAULT_DURATION_MIN) * 60 * 1000;
   const suggestionTimeMs = meetingDurationMs * SUGGESTION_THRESHOLD;
 
-  // Track elapsed time
+  // Track elapsed time (continuous timer from meeting start - NEVER stops)
   useEffect(() => {
-    if (!rtmsActive || !rtmsStartTime) {
+    // If meeting hasn't started yet, show 0
+    if (!meetingStartTime) {
       setElapsedTime(0);
       return;
     }
 
+    // Once meeting starts, timer runs continuously regardless of RTMS pause/resume
     const interval = setInterval(() => {
-      const elapsed = Date.now() - rtmsStartTime;
-      setElapsedTime(elapsed);
+      const totalElapsed = Date.now() - meetingStartTime;
+      setElapsedTime(totalElapsed);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [rtmsActive, rtmsStartTime]);
+  }, [meetingStartTime]);
 
   // Calculate progress percentage
   const progressPercent = Math.min((elapsedTime / meetingDurationMs) * 100, 100);
@@ -44,6 +46,7 @@ function MeetingSuggestions({ rtmsActive, rtmsStartTime, meetingId, scheduledDur
       const response = await fetch('/api/ai/action-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({ meetingId }),
       });
 
@@ -105,7 +108,7 @@ function MeetingSuggestions({ rtmsActive, rtmsStartTime, meetingId, scheduledDur
     }
   }, [rtmsActive, elapsedTime, suggestionTimeMs, suggestions.length, dismissed, loading, fetchSuggestions]);
 
-  // Reset when RTMS stops
+  // Reset suggestions when RTMS stops (but keep timer running)
   useEffect(() => {
     if (!rtmsActive) {
       setSuggestions([]);
@@ -136,11 +139,12 @@ function MeetingSuggestions({ rtmsActive, rtmsStartTime, meetingId, scheduledDur
     }
   };
 
-  if (!rtmsActive) return null;
+  // Don't show anything if meeting hasn't started yet
+  if (!meetingStartTime) return null;
 
   return (
     <div className="meeting-suggestions">
-      {/* Timer display with progress */}
+      {/* Timer display with progress - always visible once meeting starts */}
       <div className="meeting-timer">
         <div className="timer-info">
           <span className="timer-label">Meeting time:</span>

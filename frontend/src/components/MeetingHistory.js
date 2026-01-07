@@ -18,7 +18,9 @@ function MeetingHistory() {
 
   const fetchMeetings = async () => {
     try {
-      const response = await fetch('/api/meetings?limit=10');
+      const response = await fetch('/api/meetings?limit=10', {
+        credentials: 'include', // Include cookies for authentication
+      });
       if (!response.ok) throw new Error('Failed to fetch meetings');
       const data = await response.json();
       setMeetings(data.meetings || []);
@@ -62,7 +64,9 @@ function MeetingHistory() {
 
     setTranscriptLoading(true);
     try {
-      const response = await fetch(`/api/meetings/${meetingId}/transcript?limit=500`);
+      const response = await fetch(`/api/meetings/${meetingId}/transcript?limit=500`, {
+        credentials: 'include', // Include cookies for authentication
+      });
       if (!response.ok) throw new Error('Failed to fetch transcript');
       const data = await response.json();
       setTranscript(data.segments || []);

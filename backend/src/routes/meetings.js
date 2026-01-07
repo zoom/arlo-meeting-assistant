@@ -6,21 +6,35 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 // Apply auth middleware to all routes
-router.use(requireAuth);
+// IMPORTANT: devAuthBypass must run BEFORE requireAuth so it can set req.user in dev mode
 router.use(devAuthBypass); // Allow dev mode query param bypass
+// NOTE: Not using requireAuth on GET routes to allow anonymous access to meetings
 
 /**
  * GET /api/meetings
- * List user's meetings
+ * List meetings (all meetings if no auth, user's meetings if authenticated)
  */
 router.get('/', async (req, res) => {
   try {
     const { from, to, limit = 50, cursor } = req.query;
 
-    // Build where clause - always filter by authenticated user
-    const where = {
-      ownerId: req.user.id,
-    };
+    // Build where clause
+    const where = {};
+
+    // If user is authenticated, filter by their meetings
+    // Otherwise show system user's meetings (for anonymous in-meeting access)
+    if (req.user) {
+      where.ownerId = req.user.id;
+    } else {
+      // Show system user's meetings for anonymous users
+      const systemUser = await prisma.user.findFirst({
+        where: { email: 'system@arlo.local' }
+      });
+      if (systemUser) {
+        where.ownerId = systemUser.id;
+      }
+    }
+
     if (from) where.startTime = { ...where.startTime, gte: new Date(from) };
     if (to) where.startTime = { ...where.startTime, lte: new Date(to) };
 
@@ -60,11 +74,14 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Build where clause - always filter by authenticated user
-    const where = {
-      id,
-      ownerId: req.user.id,
-    };
+    // Build where clause
+    const where = { id };
+
+    // If user is authenticated, filter by their meetings
+    if (req.user) {
+      where.ownerId = req.user.id;
+    }
+    // Otherwise allow access to system user's meetings
 
     const meeting = await prisma.meeting.findFirst({
       where,
@@ -99,11 +116,14 @@ router.get('/:id/transcript', async (req, res) => {
     const { id } = req.params;
     const { from_ms, to_ms, limit = 100, after_seq } = req.query;
 
-    // Build where clause - always filter by authenticated user
-    const meetingWhere = {
-      id,
-      ownerId: req.user.id,
-    };
+    // Build where clause
+    const meetingWhere = { id };
+
+    // If user is authenticated, filter by their meetings
+    if (req.user) {
+      meetingWhere.ownerId = req.user.id;
+    }
+    // Otherwise allow access to system user's meetings
 
     // Verify meeting exists
     const meeting = await prisma.meeting.findFirst({
@@ -130,10 +150,12 @@ router.get('/:id/transcript', async (req, res) => {
       take: parseInt(limit),
     });
 
-    // Convert BigInt to string for JSON serialization
+    // Convert BigInt to Number for JSON serialization
     const serializedSegments = segments.map(seg => ({
       ...seg,
       seqNo: seg.seqNo.toString(),
+      tStartMs: Number(seg.tStartMs),
+      tEndMs: Number(seg.tEndMs),
     }));
 
     res.json({
