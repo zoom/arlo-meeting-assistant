@@ -6,8 +6,9 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 // Apply auth middleware to all routes
-router.use(requireAuth);
+// IMPORTANT: devAuthBypass must run BEFORE requireAuth so it can set req.user in dev mode
 router.use(devAuthBypass); // Allow dev mode query param bypass
+router.use(requireAuth);
 
 /**
  * GET /api/highlights

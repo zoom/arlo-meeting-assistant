@@ -22,6 +22,7 @@ function AIPanel({ meetingId }) {
       const response = await fetch('/api/ai/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({ meetingId }),
       });
 
@@ -51,6 +52,7 @@ function AIPanel({ meetingId }) {
       const response = await fetch('/api/ai/action-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({ meetingId }),
       });
 
@@ -78,6 +80,7 @@ function AIPanel({ meetingId }) {
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({ meetingId, question: chatQuestion }),
       });
 

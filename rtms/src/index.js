@@ -151,8 +151,24 @@ async function handleRTMSStarted(payload) {
   } catch (error) {
     console.error('❌ Failed to start RTMS:', error);
     console.error('Stack:', error.stack);
-    // Remove from active sessions on failure
-    activeSessions.delete(meeting_uuid);
+
+    // Check if error is "already initialized" - this can happen during quick stop/start
+    if (error.message && error.message.includes('Invalid status')) {
+      console.warn('⚠️ SDK is in invalid state (likely still cleaning up from previous session)');
+      console.warn('⚠️ Waiting 2 seconds before retrying...');
+
+      // Remove from active sessions so we can retry
+      activeSessions.delete(meeting_uuid);
+
+      // Retry after delay
+      setTimeout(async () => {
+        console.log('🔄 Retrying RTMS join after SDK cleanup...');
+        await handleRTMSStarted(payload);
+      }, 2000);
+    } else {
+      // For other errors, just remove from active sessions
+      activeSessions.delete(meeting_uuid);
+    }
   }
 }
 
@@ -290,17 +306,32 @@ async function handleTranscript(meetingId, transcript) {
     }
 
     // Save transcript segment
-    await prisma.transcriptSegment.create({
-      data: {
+    // Note: RTMS sends timestamps in microseconds, convert to milliseconds
+    const tStartMs = Math.floor((segment.tStartMs || 0) / 1000);
+    const tEndMs = Math.floor((segment.tEndMs || segment.tStartMs || 0) / 1000);
+
+    // Use upsert to handle duplicates (both RTMS and backend may try to save)
+    await prisma.transcriptSegment.upsert({
+      where: {
+        meetingId_seqNo: {
+          meetingId: meeting.id,
+          seqNo: BigInt(segment.seqNo),
+        },
+      },
+      create: {
         meetingId: meeting.id,
         speakerId: speaker.id,
         seqNo: BigInt(segment.seqNo),
         text: segment.text,
-        tStartMs: BigInt(segment.tStartMs || 0),
-        tEndMs: BigInt(segment.tEndMs || segment.tStartMs || 0),
+        tStartMs: tStartMs,
+        tEndMs: tEndMs,
+      },
+      update: {
+        text: segment.text,
+        tEndMs: tEndMs,
       },
     });
-    console.log(`✅ Saved segment to database`);
+    console.log(`✅ Saved segment to database (${tStartMs}ms - ${tEndMs}ms)`);
 
   } catch (dbError) {
     console.error('❌ Database save error:', dbError.message);
