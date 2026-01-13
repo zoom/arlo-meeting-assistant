@@ -3,6 +3,14 @@
   flex-direction: column;
   height: 100vh;
   background: #fff;
+  overflow: hidden;
+}
+
+.zoom-app-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 20px;
 }
 
 .header {
@@ -24,6 +32,24 @@
 .user-info {
   font-size: 14px;
   color: #666;
+}
+
+/* Custom scrollbar for main content */
+.zoom-app-content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.zoom-app-content::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+
+.zoom-app-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 5px;
+}
+
+.zoom-app-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .not-in-meeting, .authenticating {

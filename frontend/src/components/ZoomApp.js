@@ -512,29 +512,31 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
         </div>
       </div>
 
-      <RTMSControls
-        rtmsActive={rtmsActive}
-        rtmsLoading={rtmsLoading}
-        onStart={startRTMS}
-        onStop={stopRTMS}
-      />
+      <div className="zoom-app-content">
+        <RTMSControls
+          rtmsActive={rtmsActive}
+          rtmsLoading={rtmsLoading}
+          onStart={startRTMS}
+          onStop={stopRTMS}
+        />
 
-      <MeetingSuggestions
-        rtmsActive={rtmsActive}
-        meetingStartTime={getMeetingStartTime()}
-        meetingId={meetingContext?.meetingUUID}
-        scheduledDuration={meetingContext?.scheduledDuration}
-      />
+        <MeetingSuggestions
+          rtmsActive={rtmsActive}
+          meetingStartTime={getMeetingStartTime()}
+          meetingId={meetingContext?.meetingUUID}
+          scheduledDuration={meetingContext?.scheduledDuration}
+        />
 
-      <LiveTranscript
-        ws={ws}
-        rtmsActive={rtmsActive}
-        meetingId={meetingContext?.meetingUUID}
-      />
+        <LiveTranscript
+          ws={ws}
+          rtmsActive={rtmsActive}
+          meetingId={meetingContext?.meetingUUID}
+        />
 
-      <AIPanel meetingId={meetingContext?.meetingUUID} />
+        <AIPanel meetingId={meetingContext?.meetingUUID} />
 
-      <MeetingHistory />
+        <MeetingHistory />
+      </div>
     </div>
   );
 }

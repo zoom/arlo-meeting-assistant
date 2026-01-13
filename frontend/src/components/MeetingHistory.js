@@ -7,8 +7,8 @@ function MeetingHistory() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
-  const [expanded, setExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState('ai'); // 'ai' or 'transcript'
+  const [expanded, setExpanded] = useState(true); // Start expanded by default
+  const [activeTab, setActiveTab] = useState('transcript'); // Default to transcript tab
   const [transcript, setTranscript] = useState([]);
   const [transcriptLoading, setTranscriptLoading] = useState(false);
 
@@ -50,12 +50,19 @@ function MeetingHistory() {
 
   const handleSelectMeeting = (meeting) => {
     if (selectedMeeting?.id === meeting.id) {
+      // Deselect if clicking same meeting
       setSelectedMeeting(null);
       setTranscript([]);
     } else {
+      // Select new meeting and auto-fetch transcript
       setSelectedMeeting(meeting);
       setTranscript([]);
-      setActiveTab('ai');
+      setActiveTab('transcript'); // Default to transcript tab
+
+      // Auto-fetch transcript if meeting has segments
+      if (meeting._count?.segments > 0) {
+        fetchTranscript(meeting.id);
+      }
     }
   };
 
@@ -115,6 +122,12 @@ function MeetingHistory() {
         <span className="meeting-count">{meetings.length}</span>
         <span className="expand-icon">{expanded ? '▼' : '▶'}</span>
       </div>
+
+      {expanded && meetings.length > 0 && !selectedMeeting && (
+        <div className="history-hint">
+          Click on a meeting to view its transcript and AI insights
+        </div>
+      )}
 
       {expanded && (
         <div className="history-content">
