@@ -173,7 +173,7 @@ ZOOM_APP_REDIRECT_URI=https://your-ngrok-url.ngrok-free.app/api/zoomapp/auth
 1. **Domain Allowlist** - Add `appssdk.zoom.us` to allowed domains
 2. **OAuth Redirect URL** - Configure BEFORE users can install app
 3. **RTMS Scopes** - Enable Transcripts scope minimum
-4. **SDK Capabilities** - Add all required APIs (see `/docs/02-sdk-setup.md`)
+4. **SDK Capabilities** - Add all required APIs (see `.claude/skills/zoom-apps/02-sdk-setup.md`)
 5. **Home URL** - Points to your ngrok/production URL
 
 ### Environment Variables (Required)
@@ -414,25 +414,30 @@ zoomSdk.onAuthorized(async ({ code, state }) => {
 
 ## Documentation Reference
 
-The `/docs/` directory contains **15 comprehensive guides**:
+### Zoom Apps Development Skill (Reusable)
 
-- **00-quick-start.md** - Get up and running in 30 minutes
-- **01-architecture-overview.md** - Detailed system architecture
-- **02-sdk-setup.md** - SDK configuration and initialization
-- **03-frontend-guide.md** - React component patterns
-- **04-backend-guide.md** - OAuth and API proxy implementation
-- **05-rtms-guide.md** - Real-time media streams integration
-- **06-sdk-reference.md** - Complete SDK API reference
-- **07-security-guide.md** - OWASP best practices
-- **07-critical-setup-requirements.md** - Must-do Marketplace config
-- **08-api-integration-guide.md** - Making Zoom REST API calls
-- **09-development-workflow.md** - Day-to-day development
-- **ARCHITECTURE.md** - Arlo Meeting Assistant specific architecture
+For **general Zoom Apps development guidance**, see the skill at `.claude/skills/zoom-apps/`:
+
+| Document | Topics |
+|----------|--------|
+| `01-getting-started.md` | Marketplace setup, ngrok, environment config |
+| `02-sdk-setup.md` | SDK initialization, capabilities, contexts |
+| `03-frontend-patterns.md` | React patterns, OAuth flows, multi-instance |
+| `04-backend-oauth.md` | Express, OAuth flows, token management |
+| `05-rtms-integration.md` | RTMS SDK, WebSocket, webhook handling |
+| `06-rest-api.md` | API proxy, common endpoints, pagination |
+| `07-security.md` | PKCE, CSRF, encryption, headers |
+| `08-sdk-reference.md` | Complete SDK API reference |
+
+### Project-Specific Documentation
+
+The `/docs/` directory contains Arlo-specific documentation:
+
+- **ARCHITECTURE.md** - Arlo Meeting Assistant system architecture
 - **PROJECT_STATUS.md** - Roadmap (v0.5 → v1.0 → v2.0)
-- **TROUBLESHOOTING.md** - Common issues and fixes
-- **README.md** - Documentation index
+- **TROUBLESHOOTING.md** - Arlo-specific issues and fixes
 
-**Always reference these docs** before making architectural decisions or when unsure about implementation patterns.
+**Reference the skill docs** for general Zoom Apps patterns, and project docs for Arlo-specific implementation details.
 
 ## Project Status
 
