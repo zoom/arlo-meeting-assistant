@@ -5,11 +5,7 @@ const rtms = rtmsModule.default; // ES module default export
 const { PrismaClient } = require('@prisma/client');
 const axios = require('axios');
 
-// Enable verbose logging for RTMS SDK
-rtms.configureLogger({
-  level: rtms.LogLevel.TRACE,
-  enabled: true
-});
+// Logging is now configured via ZM_RTMS_LOG_LEVEL env var (e.g. "debug")
 
 const app = express();
 const prisma = new PrismaClient();
@@ -17,7 +13,7 @@ const prisma = new PrismaClient();
 // Middleware
 app.use(express.json());
 
-// Store active RTMS sessions
+// Store active RTMS sessions — each meeting gets its own Client instance
 const activeSessions = new Map();
 
 // =============================================================================
@@ -32,7 +28,7 @@ app.post('/webhook', async (req, res) => {
   const { event, payload } = req.body;
 
   console.log('='.repeat(60));
-  console.log(`📨 RTMS Webhook Received: ${event}`);
+  console.log(`RTMS Webhook Received: ${event}`);
   console.log('='.repeat(60));
   console.log(JSON.stringify(payload, null, 2));
 
@@ -50,53 +46,51 @@ app.post('/webhook', async (req, res) => {
         break;
 
       default:
-        console.log(`⚠️ Unhandled webhook event: ${event}`);
+        console.log(`Unhandled webhook event: ${event}`);
     }
   } catch (error) {
-    console.error('❌ Webhook handler error:', error);
+    console.error('Webhook handler error:', error);
   }
 });
 
 /**
- * Handle RTMS started event
+ * Handle RTMS started event — creates a new Client per meeting
  */
 async function handleRTMSStarted(payload) {
   const {
     meeting_uuid,
-    operator_id,
     rtms_stream_id,
     server_urls
   } = payload;
 
-  console.log('🚀 Starting RTMS session...');
+  console.log('Starting RTMS session...');
   console.log(`Meeting UUID: ${meeting_uuid}`);
   console.log(`Stream ID: ${rtms_stream_id}`);
   console.log(`Server URLs: ${server_urls}`);
 
   // Check if already connected to this meeting (prevent duplicate webhook handling)
   if (activeSessions.has(meeting_uuid)) {
-    console.log('⚠️ Already connected to this meeting, ignoring duplicate webhook');
+    console.log('Already connected to this meeting, ignoring duplicate webhook');
     return;
   }
 
   try {
+    // Create a new Client instance for this meeting (v1.0 class-based API)
+    const client = new rtms.Client();
+
     // Set up transcript data handler BEFORE joining
-    // Callback signature: (buffer, size, timestamp, metadata)
-    rtms.onTranscriptData((buffer, size, timestamp, metadata) => {
+    // v1.0 callback signature: (data, timestamp, metadata) — no `size` param
+    client.onTranscriptData((data, timestamp, metadata) => {
       try {
-        // Convert buffer to string (UTF-8 encoding)
-        const text = buffer.toString('utf8');
-        console.log('📝 Raw transcript event:');
+        const text = data.toString('utf-8');
+        console.log('Raw transcript event:');
         console.log(`  Text: ${text}`);
-        console.log(`  Size: ${size}`);
         console.log(`  Timestamp: ${timestamp}`);
         console.log(`  Metadata:`, JSON.stringify(metadata, null, 2));
 
-        // Create transcript object for handleTranscript
         const transcriptData = {
           text,
           timestamp,
-          size,
           ...metadata
         };
 
@@ -109,66 +103,49 @@ async function handleRTMSStarted(payload) {
     });
 
     // Set up join confirmation handler
-    rtms.onJoinConfirm((reason) => {
-      console.log('✅ Joined RTMS session, reason:', reason);
+    client.onJoinConfirm((reason) => {
+      console.log('Joined RTMS session, reason:', reason);
     });
 
-    // Set up leave handler
-    rtms.onLeave(() => {
-      console.log('📡 RTMS Connection Closed');
+    // Set up leave handler — v1.0 now receives a reason parameter
+    client.onLeave((reason) => {
+      console.log('RTMS Connection Closed, reason:', reason);
       activeSessions.delete(meeting_uuid);
     });
 
-    // Set up session update handler
-    rtms.onSessionUpdate((event, uuid) => {
-      console.log('📡 Session update:', event, uuid);
+    // Set up session update handler — v1.0 receives (event, session) object
+    client.onSessionUpdate((event, session) => {
+      console.log('Session update:', event, session);
     });
 
-    // Set up user update handler
-    rtms.onUserUpdate((event, uuid, name) => {
-      console.log('👤 User update:', event, uuid, name);
+    // Set up participant event handler — renamed from onUserUpdate in v1.0
+    client.onParticipantEvent((event, timestamp, participants) => {
+      console.log('Participant event:', event, timestamp, participants);
     });
 
     // Store session info BEFORE joining to prevent duplicate handling
     activeSessions.set(meeting_uuid, {
+      client,
       streamId: rtms_stream_id,
       startTime: new Date(),
     });
 
-    // Join the RTMS session with polling enabled
-    const result = rtms.join({
-      meeting_uuid: meeting_uuid,
-      rtms_stream_id: rtms_stream_id,
-      server_urls: server_urls,
-      pollInterval: 100, // Poll every 100ms for data
+    // Join the RTMS session — v1.0 no longer uses pollInterval
+    const result = client.join({
+      meeting_uuid,
+      rtms_stream_id,
+      server_urls,
     });
 
-    console.log('✅ Join result:', result);
+    console.log('Join result:', result);
 
     // Notify backend that RTMS is active
     await notifyBackend(meeting_uuid, 'rtms_started');
 
   } catch (error) {
-    console.error('❌ Failed to start RTMS:', error);
+    console.error('Failed to start RTMS:', error);
     console.error('Stack:', error.stack);
-
-    // Check if error is "already initialized" - this can happen during quick stop/start
-    if (error.message && error.message.includes('Invalid status')) {
-      console.warn('⚠️ SDK is in invalid state (likely still cleaning up from previous session)');
-      console.warn('⚠️ Waiting 2 seconds before retrying...');
-
-      // Remove from active sessions so we can retry
-      activeSessions.delete(meeting_uuid);
-
-      // Retry after delay
-      setTimeout(async () => {
-        console.log('🔄 Retrying RTMS join after SDK cleanup...');
-        await handleRTMSStarted(payload);
-      }, 2000);
-    } else {
-      // For other errors, just remove from active sessions
-      activeSessions.delete(meeting_uuid);
-    }
+    activeSessions.delete(meeting_uuid);
   }
 }
 
@@ -178,16 +155,17 @@ async function handleRTMSStarted(payload) {
 async function handleRTMSStopped(payload) {
   const { meeting_uuid } = payload;
 
-  console.log(`🛑 Stopping RTMS for meeting: ${meeting_uuid}`);
+  console.log(`Stopping RTMS for meeting: ${meeting_uuid}`);
 
   const session = activeSessions.get(meeting_uuid);
   if (session) {
     try {
-      rtms.leave();
+      // v1.0: call leave() on the per-meeting client instance
+      session.client.leave();
       activeSessions.delete(meeting_uuid);
-      console.log('✅ RTMS session stopped');
+      console.log('RTMS session stopped');
     } catch (error) {
-      console.error('❌ Error stopping RTMS:', error);
+      console.error('Error stopping RTMS:', error);
     }
   }
 
@@ -206,10 +184,10 @@ async function handleRTMSStopped(payload) {
           duration: new Date() - new Date(meeting.startTime),
         },
       });
-      console.log('✅ Meeting marked as completed');
+      console.log('Meeting marked as completed');
     }
   } catch (error) {
-    console.error('❌ Error updating meeting:', error);
+    console.error('Error updating meeting:', error);
   }
 
   // Notify backend
@@ -220,7 +198,7 @@ async function handleRTMSStopped(payload) {
  * Handle individual transcript segment
  */
 async function handleTranscript(meetingId, transcript) {
-  console.log('📝 Transcript:', transcript);
+  console.log('Transcript:', transcript);
 
   const {
     participant_id,
@@ -245,7 +223,7 @@ async function handleTranscript(meetingId, transcript) {
 
   // Broadcast to frontend immediately
   await broadcastSegment(meetingId, segment);
-  console.log(`📤 Broadcast segment: "${(text || '').substring(0, 50)}..."`);
+  console.log(`Broadcast segment: "${(text || '').substring(0, 50)}..."`);
 
   // Save to database
   try {
@@ -269,7 +247,7 @@ async function handleTranscript(meetingId, transcript) {
             displayName: 'System',
           },
         });
-        console.log(`✅ Created system user: ${systemUser.id}`);
+        console.log(`Created system user: ${systemUser.id}`);
       }
 
       meeting = await prisma.meeting.create({
@@ -281,7 +259,7 @@ async function handleTranscript(meetingId, transcript) {
           ownerId: systemUser.id,
         },
       });
-      console.log(`✅ Created meeting: ${meeting.id}`);
+      console.log(`Created meeting: ${meeting.id}`);
     }
 
     // Find or create speaker using zoomParticipantId (correct schema field)
@@ -302,7 +280,7 @@ async function handleTranscript(meetingId, transcript) {
           displayName: segment.speakerLabel || userName || `Speaker`,
         },
       });
-      console.log(`✅ Created speaker: ${speaker.id}`);
+      console.log(`Created speaker: ${speaker.id}`);
     }
 
     // Save transcript segment
@@ -331,10 +309,10 @@ async function handleTranscript(meetingId, transcript) {
         tEndMs: tEndMs,
       },
     });
-    console.log(`✅ Saved segment to database (${tStartMs}ms - ${tEndMs}ms)`);
+    console.log(`Saved segment to database (${tStartMs}ms - ${tEndMs}ms)`);
 
   } catch (dbError) {
-    console.error('❌ Database save error:', dbError.message);
+    console.error('Database save error:', dbError.message);
     console.error('Stack:', dbError.stack);
   }
 }
@@ -350,10 +328,10 @@ async function broadcastSegment(meetingId, segment) {
       meetingId,
       segment,
     });
-    console.log('✅ Sent to backend for broadcast');
+    console.log('Sent to backend for broadcast');
   } catch (error) {
     // Non-critical, just log
-    console.warn('⚠️ Failed to broadcast segment:', error.message);
+    console.warn('Failed to broadcast segment:', error.message);
   }
 }
 
@@ -367,9 +345,9 @@ async function notifyBackend(meetingId, status) {
       meetingId,
       status,
     });
-    console.log(`✅ Notified backend: ${status}`);
+    console.log(`Notified backend: ${status}`);
   } catch (error) {
-    console.warn('⚠️ Failed to notify backend:', error.message);
+    console.warn('Failed to notify backend:', error.message);
   }
 }
 
@@ -393,7 +371,7 @@ const PORT = process.env.RTMS_PORT || 3002;
 
 app.listen(PORT, () => {
   console.log('='.repeat(60));
-  console.log(`🎙️  Arlo Meeting Assistant RTMS Service`);
+  console.log('Arlo Meeting Assistant RTMS Service');
   console.log('='.repeat(60));
   console.log(`Port: ${PORT}`);
   console.log(`Webhook: http://localhost:${PORT}/webhook`);

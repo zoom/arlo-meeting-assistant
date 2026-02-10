@@ -179,9 +179,10 @@ Implementation:
 
 #### B. RTMS Ingestion Service
 ```javascript
-// Real-time transcript processing
+// Real-time transcript processing (@zoom/rtms v1.0, class-based Client API)
+// Each meeting gets its own rtms.Client() instance enabling multi-meeting support
 Components:
-- WebSocket client to Zoom RTMS
+- Per-meeting rtms.Client instances (stored in activeSessions Map)
 - Transcript normalization
 - Speaker identification
 - Segment buffering (2-3s)

@@ -101,6 +101,8 @@ services:
       # RTMS SDK requires these specific variable names
       ZM_RTMS_CLIENT: ${ZOOM_CLIENT_ID}
       ZM_RTMS_SECRET: ${ZOOM_CLIENT_SECRET}
+      # RTMS SDK v1.0 logging (replaces configureLogger())
+      ZM_RTMS_LOG_LEVEL: debug
     ports:
       - "3002:3002"
     volumes:

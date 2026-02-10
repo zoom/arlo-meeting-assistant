@@ -158,8 +158,7 @@ ZOOM_APP_REDIRECT_URI=https://your-ngrok-url.ngrok-free.app/api/zoomapp/auth
 - `frontend/public/index.html` - Loads Zoom Apps SDK script
 
 ### RTMS
-- `rtms/sdk/index.js` - Official @zoom/rtms SDK implementation
-- `rtms/websocket/index.js` - Custom WebSocket implementation (alternative)
+- `rtms/src/index.js` - RTMS service using @zoom/rtms v1.0 (class-based Client API, multi-meeting support)
 - Webhook handlers for `meeting.rtms_started` and `meeting.rtms_stopped`
 
 ### Database

@@ -29,7 +29,7 @@ router.post('/webhook', async (req, res) => {
 
     // Hash the plainToken with client secret and client ID
     const hash = crypto
-      .createHmac('sha256', config.zoom.clientSecret)
+      .createHmac('sha256', config.zoomClientSecret)
       .update(plainToken)
       .digest('hex');
 

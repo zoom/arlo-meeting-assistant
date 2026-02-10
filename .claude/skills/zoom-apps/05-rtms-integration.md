@@ -80,13 +80,13 @@ RTMS provides real-time access to:
 ```json
 {
   "dependencies": {
-    "@zoom/rtms": "^0.0.4",
+    "@zoom/rtms": "^1.0.0",
     "dotenv": "^16.0.0"
   }
 }
 ```
 
-**Note:** Use version `^0.0.4` (not `1.0.0`).
+**Note:** v1.0 uses a class-based `rtms.Client()` API (one client per meeting). Logging is configured via `ZM_RTMS_LOG_LEVEL` env var instead of `configureLogger()`.
 
 ### Main Handler
 
@@ -423,7 +423,7 @@ const __dirname = path.dirname(__filename);
 ```
 npm error notarget No matching version found for @zoom/rtms@^1.0.0
 ```
-**Solution:** Use `npm install @zoom/rtms@^0.0.4`
+**Solution:** Ensure you have access to the npm registry. The stable v1.0 release is available as `@zoom/rtms@^1.0.0`.
 
 ### ARM64 / Alpine Linux compatibility
 ```
