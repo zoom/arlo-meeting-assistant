@@ -12,6 +12,7 @@ const prisma = new PrismaClient();
 
 /**
  * Helper: Find meeting by database ID or Zoom meeting ID
+ * Handles URL-encoded Zoom meeting UUIDs (e.g., %2F -> /, %3D -> =)
  */
 async function findMeeting(meetingId) {
   // First try by database ID (UUID format)
@@ -19,11 +20,26 @@ async function findMeeting(meetingId) {
     where: { id: meetingId },
   });
 
-  // If not found, try by Zoom meeting ID
+  // If not found, try by Zoom meeting ID (raw)
   if (!meeting) {
     meeting = await prisma.meeting.findFirst({
       where: { zoomMeetingId: meetingId },
     });
+  }
+
+  // If still not found, try URL-decoded version
+  // Zoom meeting UUIDs contain base64 chars (/, +, =) that may be URL-encoded
+  if (!meeting) {
+    try {
+      const decoded = decodeURIComponent(meetingId);
+      if (decoded !== meetingId) {
+        meeting = await prisma.meeting.findFirst({
+          where: { zoomMeetingId: decoded },
+        });
+      }
+    } catch {
+      // Invalid URI component, ignore
+    }
   }
 
   return meeting;

@@ -96,14 +96,17 @@ ${transcript}`;
   try {
     const response = await callOpenRouter(prompt, systemPrompt, { maxTokens: 1024 });
 
+    // Strip markdown code fences if present (e.g., ```json ... ```)
+    const cleaned = response.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+
     // Try to parse as JSON
     try {
-      const parsed = JSON.parse(response);
+      const parsed = JSON.parse(cleaned);
       return parsed;
     } catch {
       // If JSON parsing fails, return structured response
       return {
-        overview: response,
+        overview: cleaned,
         keyPoints: [],
         decisions: [],
         nextSteps: [],
@@ -139,9 +142,12 @@ ${transcript}`;
   try {
     const response = await callOpenRouter(prompt, systemPrompt, { maxTokens: 1024 });
 
+    // Strip markdown code fences if present (e.g., ```json ... ```)
+    const cleaned = response.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+
     // Try to parse as JSON
     try {
-      const parsed = JSON.parse(response);
+      const parsed = JSON.parse(cleaned);
       return Array.isArray(parsed) ? parsed : [];
     } catch {
       // If JSON parsing fails, return empty array
