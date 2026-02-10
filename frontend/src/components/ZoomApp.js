@@ -127,6 +127,8 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
   const [userHasInteracted, setUserHasInteracted] = useState(false);
   const autoStartTimeoutRef = React.useRef(null);
+  // Ref to track if auto-start was attempted (persists across React Strict Mode remounts)
+  const autoStartAttemptedRef = React.useRef(false);
 
   useEffect(() => {
     // Only auto-start if:
@@ -137,15 +139,20 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
     // 5. Not currently loading
     // 6. Haven't already auto-started this session
     // 7. User hasn't manually interacted with start/stop buttons
+    // 8. Auto-start hasn't been attempted yet (ref persists across Strict Mode remounts)
     if (isAuthenticated &&
         runningContext === 'inMeeting' &&
         !rtmsActive &&
         !rtmsLoading &&
         meetingContext?.meetingUUID &&
         !hasAutoStarted &&
-        !userHasInteracted) {
+        !userHasInteracted &&
+        !autoStartAttemptedRef.current) {
 
       console.log('🚀 Scheduling auto-start of RTMS transcription...');
+
+      // Set ref IMMEDIATELY - this persists across React Strict Mode remounts
+      autoStartAttemptedRef.current = true;
       setHasAutoStarted(true);
 
       // Cancel any existing timeout to prevent duplicates
@@ -157,13 +164,14 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
       autoStartTimeoutRef.current = setTimeout(() => {
         console.log('🚀 Executing auto-start of RTMS...');
         autoStartTimeoutRef.current = null;
-        startRTMS();
+        startRTMS(true); // Pass true to indicate auto-start
       }, 1500);
     }
 
     // Cleanup function
     return () => {
       if (autoStartTimeoutRef.current) {
+        console.log('🧹 Cleanup: clearing auto-start timeout');
         clearTimeout(autoStartTimeoutRef.current);
         autoStartTimeoutRef.current = null;
       }
@@ -286,8 +294,11 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
   }
 
   // Start RTMS
-  async function startRTMS() {
+  // isAutoStart: true when called from auto-start useEffect, false for manual button clicks
+  async function startRTMS(isAutoStart = false) {
     if (rtmsLoading) return; // Prevent double-clicks
+
+    console.log('🎙️ Starting RTMS...', { isAutoStart });
 
     // Check if another instance is already starting RTMS (prevents React Strict Mode duplicates)
     const startingKey = `rtms-starting-${meetingContext?.meetingUUID}`;
@@ -304,12 +315,14 @@ function ZoomApp({ runningContext, meetingContext, userContext }) {
     // Mark that we're starting (expires after 3 seconds)
     sessionStorage.setItem(startingKey, Date.now().toString());
 
-    // Mark that user has interacted (prevents auto-start after manual stop)
-    setUserHasInteracted(true);
+    // Only mark user interaction for MANUAL starts
+    // This ensures auto-start failures don't block future manual attempts
+    if (!isAutoStart) {
+      setUserHasInteracted(true);
+    }
 
     setRtmsLoading(true);
     try {
-      console.log('🎙️ Starting RTMS...');
 
       const result = await zoomSdk.callZoomApi('startRTMS', {
         audioOptions: {

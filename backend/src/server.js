@@ -76,10 +76,120 @@ app.use('/api/ai', require('./routes/ai'));
 app.use('/api/rtms', require('./routes/rtms'));
 app.use('/api/highlights', require('./routes/highlights'));
 
-// Proxy all non-API requests to frontend (for Zoom App)
+// =============================================================================
+// FRONTEND PROXY (with friendly startup page)
+// =============================================================================
+
+const { createProxyMiddleware } = require('http-proxy-middleware');
+const axios = require('axios');
+
+// Track frontend readiness
+let frontendReady = false;
+
+// Check frontend health
+async function checkFrontendHealth() {
+  try {
+    await axios.get('http://frontend:3000', { timeout: 2000 });
+    if (!frontendReady) {
+      console.log('✅ Frontend is now ready');
+    }
+    frontendReady = true;
+    return true;
+  } catch {
+    frontendReady = false;
+    return false;
+  }
+}
+
+// Start checking immediately, then periodically until ready
+checkFrontendHealth().then(ready => {
+  if (!ready) {
+    console.log('⏳ Waiting for frontend to be ready...');
+    const healthCheckInterval = setInterval(async () => {
+      if (await checkFrontendHealth()) {
+        clearInterval(healthCheckInterval);
+      }
+    }, 2000);
+  }
+});
+
+// HTML page shown while frontend is starting up
+const getStartupPage = () => `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Arlo Meeting Assistant - Starting Up</title>
+  <meta http-equiv="refresh" content="3">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255,255,255,0.1);
+      border-left-color: #4f46e5;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1.5rem;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    p { color: rgba(255,255,255,0.7); font-size: 0.9rem; }
+    .subtext { margin-top: 1rem; font-size: 0.8rem; color: rgba(255,255,255,0.5); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h1>Arlo Meeting Assistant</h1>
+    <p>Starting up... please wait</p>
+    <p class="subtext">This page will refresh automatically</p>
+  </div>
+</body>
+</html>
+`;
+
+// Proxy middleware - DO NOT use ws:true as it intercepts ALL WebSocket upgrades
+// Our WebSocket server (initialized separately) handles /ws connections
+const frontendProxy = createProxyMiddleware({
+  target: 'http://frontend:3000',
+  changeOrigin: true,
+  ws: false, // IMPORTANT: Don't proxy WebSockets - our WebSocket.Server handles /ws
+  logLevel: 'warn',
+  onError: (err, req, res) => {
+    console.error('Proxy error:', err.message, 'for path:', req.path);
+    // Only show startup page for frontend requests, not API requests
+    if (!frontendReady && !req.path.startsWith('/api/')) {
+      res.writeHead(503, {
+        'Content-Type': 'text/html',
+        'Retry-After': '3',
+      });
+      res.end(getStartupPage());
+    } else {
+      res.writeHead(502, { 'Content-Type': 'text/plain' });
+      res.end('Bad Gateway - Frontend temporarily unavailable');
+    }
+  },
+});
+
+// Apply proxy for frontend routes only
 app.use((req, res, next) => {
-  // Skip API routes and health check
-  if (req.path.startsWith('/api/') || req.path === '/health') {
+  // Skip API routes, health check, and WebSocket path
+  if (req.path.startsWith('/api/') || req.path === '/health' || req.path.startsWith('/ws')) {
     return next();
   }
 
@@ -90,33 +200,8 @@ app.use((req, res, next) => {
     console.log('💡 This should be going to /api/rtms/webhook instead');
   }
 
-  // Proxy to frontend
-  const axios = require('axios');
-  const frontendUrl = `http://frontend:3000${req.path}`;
-
-  // Remove problematic headers that break React dev server
-  const headers = { ...req.headers };
-  delete headers.host;
-  delete headers.connection;
-
-  axios({
-    method: req.method,
-    url: frontendUrl,
-    headers,
-    data: req.body,
-    responseType: 'stream',
-  })
-    .then(response => {
-      res.status(response.status);
-      Object.keys(response.headers).forEach(key => {
-        res.setHeader(key, response.headers[key]);
-      });
-      response.data.pipe(res);
-    })
-    .catch(error => {
-      console.error('Proxy error:', error.message);
-      res.status(502).send('Bad Gateway - Frontend unavailable');
-    });
+  // Use the proxy middleware for frontend requests
+  frontendProxy(req, res, next);
 });
 
 // =============================================================================

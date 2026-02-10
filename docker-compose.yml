@@ -98,6 +98,9 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/meeting_assistant
       BACKEND_URL: http://backend:3000
+      # RTMS SDK requires these specific variable names
+      ZM_RTMS_CLIENT: ${ZOOM_CLIENT_ID}
+      ZM_RTMS_SECRET: ${ZOOM_CLIENT_SECRET}
     ports:
       - "3002:3002"
     volumes:
