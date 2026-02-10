@@ -1,6 +1,6 @@
 # Arlo Meeting Assistant - Project Status
 
-**Last Updated:** 2025-12-30
+**Last Updated:** 2026-02-10
 **Project State:** ✅ **v0.5 MVP - FUNCTIONAL**
 **Target:** Open-source starter kit for building meeting assistants as Zoom Apps (no bots!)
 
@@ -39,9 +39,9 @@ Create an open-source "Arlo Meeting Assistant Starter Kit" that demonstrates how
 - ✅ Session management with httpOnly cookies (security)
 
 **Tech Stack:**
-- Frontend: React + Zoom Apps SDK ✅
-- Backend: Node.js + Express + Postgres ✅
-- RTMS: @zoom/rtms SDK with WebSocket ingestion ✅
+- Frontend: React 18 + CRA 5 + `@base-ui/react` + Zoom Apps SDK ✅
+- Backend: Node.js + Express (JavaScript) + Postgres + Prisma ✅
+- RTMS: @zoom/rtms v1.0.2 with WebSocket ingestion ✅
 - AI: OpenRouter (free models) ✅
 - Docker: Full Docker Compose setup ✅
 
@@ -101,7 +101,7 @@ Create an open-source "Arlo Meeting Assistant Starter Kit" that demonstrates how
 - [x] React app with Zoom Apps SDK
 - [x] SDK initialization & configuration (all required capabilities)
 - [x] OAuth flow (in-client PKCE)
-- [x] Basic UI shell with CSS modules
+- [x] UI built with `@base-ui/react` + plain CSS (migrated from vanilla CSS, Feb 2026)
 
 **Deliverables:**
 - ✅ App loads in Zoom client
@@ -436,11 +436,11 @@ LIMIT 20;
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
 | **Runtime** | Node.js 20+ | Best ecosystem for Zoom SDK & RTMS |
-| **Frontend Framework** | React 18 + Next.js 14 | Industry standard, great DX |
-| **Backend Framework** | Express.js | Simple, flexible, well-documented |
+| **Frontend Framework** | React 18 + CRA 5 | Industry standard, Zoom App compatible |
+| **Backend Framework** | Express.js (JavaScript) | Simple, flexible, well-documented |
 | **Database** | PostgreSQL 15+ | Full-text search, JSON support, mature |
 | **ORM** | Prisma | Type-safe, great migrations, modern |
-| **UI Library** | Tailwind + shadcn/ui | Fast development, customizable |
+| **UI Library** | `@base-ui/react` + plain CSS | Unstyled, accessible, CSS custom properties |
 | **WebSocket** | ws + Redis pub/sub | Scalable, battle-tested |
 | **AI Provider** | OpenRouter | Free models, multiple providers, easy switch |
 | **Default LLM** | Gemini Flash (free) | No API key needed, good quality |
@@ -570,28 +570,29 @@ LIMIT 20;
 
 ## 📊 Progress Tracking
 
-### Overall Progress: 70% Complete (v0.5 MVP Functional)
+### Overall Progress: 75% Complete (v0.5 MVP Functional)
 - [x] Requirements gathering
 - [x] Architecture design
 - [x] Tech stack selection
 - [x] Roadmap definition
 - [x] Development kickoff
 - [x] Phase 1: Foundation (100% ✅)
-- [x] Phase 2: RTMS (100% ✅)
+- [x] Phase 2: RTMS (100% ✅) — upgraded to @zoom/rtms v1.0.2
 - [x] Phase 3: Web App (80% - some UI components)
 - [x] Phase 4: AI Integration (90% - OpenRouter working, suggestions placeholder)
 - [ ] Phase 5: Real-time AI (50% - button exists, auto-trigger not implemented)
 - [x] Phase 6: Highlights (100% ✅)
 - [x] Phase 7: Search & Export (100% ✅)
 - [x] Phase 8: Polish & Docs (95% - excellent docs, needs minor polish)
+- [x] UI Migration: Base UI (100% ✅) — migrated to `@base-ui/react` (Feb 2026)
 - [ ] Phase 9: Testing (20% - manual testing only)
 - [ ] Phase 10: Demo & Launch (10% - README ready, needs demo video)
 
 **Code Statistics:**
-- **Backend:** ~2,000 lines (6 route files, 3 services, middleware)
-- **Frontend:** ~1,300 lines (8 components)
-- **RTMS:** ~400 lines (ingestion worker)
-- **Documentation:** 15 comprehensive guides
+- **Backend:** ~2,000 lines (6 route files, 3 services, middleware) — JavaScript/Express
+- **Frontend:** ~1,300 lines (8 components) — React 18 + `@base-ui/react` + plain CSS
+- **RTMS:** ~400 lines (ingestion worker) — @zoom/rtms v1.0.2
+- **Documentation:** 15 comprehensive guides + reusable Zoom Apps skill
 - **Total:** ~3,500+ lines of production-quality code
 
 ---
@@ -601,11 +602,13 @@ LIMIT 20;
 2. [x] LICENSE and CONTRIBUTING.md ✅
 3. [x] Full-text search optimization (GIN index) ✅
 4. [x] Update PROJECT_STATUS.md to reflect current state ✅
-5. [ ] End-to-end testing on fresh install
-6. [ ] Add GitHub issue templates
-7. [ ] Add basic smoke tests
-8. [ ] Complete or mark AI suggestions as "Coming Soon"
-9. [ ] Create demo video
-10. [ ] Public launch
+5. [x] Migrate frontend UI to `@base-ui/react` ✅ (Feb 2026)
+6. [x] Upgrade RTMS SDK to @zoom/rtms v1.0.2 ✅
+7. [ ] End-to-end testing on fresh install
+8. [ ] Add GitHub issue templates
+9. [ ] Add basic smoke tests
+10. [ ] Complete or mark AI suggestions as "Coming Soon"
+11. [ ] Create demo video
+12. [ ] Public launch
 
 **Questions or updates?** Update this document as the project progresses.

@@ -68,12 +68,13 @@ This document outlines the architecture for a Zoom Apps-based meeting assistant 
 
 ### 1. Zoom App Component (In-Meeting)
 
-**Location:** `/frontend/zoom-app/`
+**Location:** `/frontend/`
 
 **Technology:**
-- React 18
+- React 18 (Create React App 5)
 - Zoom Apps SDK 0.16+
-- Tailwind CSS + shadcn/ui
+- `@base-ui/react` (unstyled, accessible components) + plain CSS
+- CSS custom properties (design tokens) in `src/index.css`
 - WebSocket client
 
 **Key Features:**
@@ -81,12 +82,11 @@ This document outlines the architecture for a Zoom Apps-based meeting assistant 
 **Live Transcript View:**
 ```javascript
 // Real-time caption display with < 1s latency
-- Virtualized scrolling (react-window)
-- "Follow Live" toggle
+- ScrollArea (Base UI) with auto-scroll
+- "Resume Live" button when scrolled up
 - Speaker labels
 - Timestamps
 - Search/highlight
-- Font size controls
 ```
 
 **AI Assistant Panel:**
@@ -153,8 +153,7 @@ async function startRTMS() {
 
 **Technology:**
 - Node.js 20+
-- Express.js
-- TypeScript
+- Express.js (JavaScript, not TypeScript)
 - ws (WebSocket server)
 - Prisma (ORM)
 
@@ -278,245 +277,38 @@ Prompt Templates:
 
 **Location:** `/backend/prisma/schema.prisma`
 
-```prisma
-// Core Models
+See `backend/prisma/schema.prisma` for the full schema. Key models:
 
-model User {
-  id            String    @id @default(uuid())
-  zoomUserId    String    @unique
-  email         String
-  displayName   String
-  avatarUrl     String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+- **User** — Zoom user, linked by `zoomUserId`
+- **UserToken** — Encrypted OAuth tokens (AES-256), auto-refresh
+- **Meeting** — Meeting instance with title, timestamps, status, owner
+- **Speaker** — Meeting participants with labels and roles
+- **TranscriptSegment** — Caption lines with BigInt timestamps (`tStartMs`, `tEndMs`, `seqNo`)
+  - `@@unique([meetingId, seqNo])` for idempotent writes
+  - Indexed by `(meetingId, tStartMs)` and `(meetingId, seqNo)`
+- **VttFile** — WebVTT export files
+- **Highlight** — User-created bookmarks with time ranges and tags
+- **AiSession / AiMessage / AiCitation** — AI chat history with transcript citations
 
-  meetings      Meeting[]
-  highlights    Highlight[]
-  aiSessions    AiSession[]
-}
-
-model Meeting {
-  id              String    @id @default(uuid())
-  zoomMeetingId   String
-  title           String    // From API or AI-generated
-  startTime       DateTime
-  endTime         DateTime?
-  duration        Int?      // milliseconds
-  status          String    // 'ongoing' | 'completed' | 'failed'
-  language        String    @default("en")
-  timezone        String
-  ownerId         String
-  owner           User      @relation(fields: [ownerId], references: [id])
-
-  speakers        Speaker[]
-  segments        TranscriptSegment[]
-  highlights      Highlight[]
-  vttFiles        VttFile[]
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([ownerId, startTime])
-  @@index([zoomMeetingId])
-}
-
-model Speaker {
-  id                  String  @id @default(uuid())
-  meetingId           String
-  meeting             Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  label               String  // "Speaker 1", "Speaker 2"
-  zoomParticipantId   String?
-  displayName         String?
-  role                String? // 'host' | 'participant'
-
-  segments            TranscriptSegment[]
-
-  @@index([meetingId])
-}
-
-model TranscriptSegment {
-  id          String    @id @default(uuid())
-  meetingId   String
-  meeting     Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  speakerId   String?
-  speaker     Speaker?  @relation(fields: [speakerId], references: [id], onDelete: SetNull)
-
-  tStartMs    Int       // Timestamp start (milliseconds)
-  tEndMs      Int       // Timestamp end (milliseconds)
-  seqNo       BigInt    // Sequence number for ordering
-  text        String    // Transcript text
-  confidence  Float?    // Speech-to-text confidence
-
-  createdAt   DateTime  @default(now())
-
-  @@unique([meetingId, seqNo])
-  @@index([meetingId, tStartMs])
-  @@index([meetingId, seqNo])
-  @@fulltext([text])  // Full-text search index
-}
-
-model VttFile {
-  id            String    @id @default(uuid())
-  meetingId     String
-  meeting       Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  storageKey    String    // File path or S3 key
-  version       Int       @default(1)
-  generatedAt   DateTime  @default(now())
-
-  @@index([meetingId])
-}
-
-model Highlight {
-  id          String    @id @default(uuid())
-  meetingId   String
-  meeting     Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-
-  tStartMs    Int       // Highlight start time
-  tEndMs      Int       // Highlight end time
-  title       String
-  notes       String?
-  tags        String[]  // Array of tags
-
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([meetingId])
-  @@index([userId])
-}
-
-// AI Features (Optional, feature-flagged)
-
-model AiSession {
-  id          String      @id @default(uuid())
-  userId      String
-  user        User        @relation(fields: [userId], references: [id])
-  title       String?
-  createdAt   DateTime    @default(now())
-
-  messages    AiMessage[]
-}
-
-model AiMessage {
-  id          String    @id @default(uuid())
-  sessionId   String
-  session     AiSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  role        String    // 'user' | 'assistant' | 'system'
-  content     String    @db.Text
-  filters     Json?     // Search filters used
-
-  citations   AiCitation[]
-
-  createdAt   DateTime  @default(now())
-
-  @@index([sessionId])
-}
-
-model AiCitation {
-  id          String    @id @default(uuid())
-  messageId   String
-  message     AiMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  meetingId   String
-  segmentId   String?
-  tStartMs    Int
-  tEndMs      Int
-  confidence  Float?
-
-  @@index([messageId])
-}
-```
+All tables use `@@map()` for snake_case table names and `@map()` for snake_case column names. All user-scoped tables cascade delete from User/Meeting.
 
 ---
 
-### 4. Post-Meeting Web App
+### 4. Post-Meeting Web App (Planned — Not Yet Implemented)
 
-**Location:** `/frontend/web-app/`
+A standalone web app for browsing meeting history outside of Zoom is planned for a future phase. See [PROJECT_STATUS.md](./PROJECT_STATUS.md) Phase 3 for details.
 
-**Technology:**
-- Next.js 14 (App Router)
-- React Server Components
-- Tailwind CSS + shadcn/ui
-- TanStack Query (data fetching)
-- react-virtual (transcript virtualization)
+**Planned Technology:** Next.js (App Router), separate from the in-meeting Zoom App.
 
-**Routes:**
-
-```javascript
-// App structure
-/                          → Landing page (sign in with Zoom)
-/home                      → Dashboard + chat with your notetaker
-/meetings                  → List of past meetings
-/meetings/[id]             → Meeting detail with transcript
+**Planned Routes:**
+```
+/                  → Landing page (sign in with Zoom)
+/home              → Dashboard + chat with your notetaker
+/meetings          → List of past meetings
+/meetings/[id]     → Meeting detail with transcript
 ```
 
-**Key Pages:**
-
-#### `/home` - Dashboard
-```javascript
-Features:
-- Chat with your transcripts (RAG)
-- Highlights from this week
-- Reminders from yesterday
-- Quick prompts:
-  • "What did I commit to this week?"
-  • "Action items from yesterday?"
-  • "Decisions from last meeting?"
-- Link to meetings list
-
-Components:
-- <ChatInterface />
-- <WeeklyHighlights />
-- <QuickPrompts />
-- <RecentMeetings />
-```
-
-#### `/meetings` - Meetings List
-```javascript
-Features:
-- Table view: Title, Date, Duration, Participants
-- Search: Full-text search across all transcripts
-- Filters: Date range, tags
-- Sort: By date, duration, title
-- Export: VTT, JSON
-
-Components:
-- <MeetingsTable />
-- <SearchBar />
-- <FilterPanel />
-```
-
-#### `/meetings/[id]` - Meeting Detail
-```javascript
-Sections:
-1. Summary
-   - AI-generated description
-   - Key highlights
-   - "Ask about this meeting" mini-chat
-
-2. Transcript / Timeline
-   - Virtualized scrolling
-   - Speaker labels + timestamps
-   - Inline search with jump-to
-   - Follow-live mode (if meeting ongoing)
-
-3. Highlights & Action Items
-   - User-created highlights
-   - AI-extracted action items
-   - Table: Owner | Task | Due | Source (timestamp)
-   - Click timestamp → jump to transcript
-
-4. Export Options
-   - Download VTT (for video players)
-   - Export JSON (for integrations)
-   - Share link (future feature)
-
-Components:
-- <MeetingSummary />
-- <TranscriptViewer />
-- <HighlightsPanel />
-- <ActionItemsTable />
-```
+> **Note:** Some post-meeting features (meeting history, highlights, AI chat) are currently available within the in-meeting Zoom App itself via the `MeetingHistory` and `AIPanel` components.
 
 ---
 
@@ -803,39 +595,20 @@ SELECT * FROM meetings WHERE owner_id = :currentUserId
 
 ### Development (Docker Compose)
 
-```yaml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: meeting_assistant
-      POSTGRES_USER: dev
-      POSTGRES_PASSWORD: dev
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+See `docker-compose.yml` for the full configuration. Services:
 
-  backend:
-    build: ./backend
-    environment:
-      DATABASE_URL: postgresql://dev:dev@postgres:5432/meeting_assistant
-      ZOOM_CLIENT_ID: ${ZOOM_CLIENT_ID}
-      ZOOM_CLIENT_SECRET: ${ZOOM_CLIENT_SECRET}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      SESSION_SECRET: ${SESSION_SECRET}
-    ports:
-      - "3000:3000"
-    depends_on:
-      - postgres
+| Service | Port | Notes |
+|---------|------|-------|
+| `postgres` | 5432 | PostgreSQL 15, healthcheck enabled |
+| `backend` | 3000 | Express API, reads `.env` file, nodemon for dev |
+| `frontend` | 3001 | CRA dev server, proxies API to backend |
+| `rtms` | 3002 | RTMS SDK, forced `linux/amd64` (Rosetta on Apple Silicon) |
+| `redis` | 6379 | Optional (profile: `with-redis`), for WebSocket scaling |
 
-  frontend:
-    build: ./frontend
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3000
-    ports:
-      - "3001:3000"
+```bash
+docker-compose up --build              # Start all (except redis)
+docker-compose up --build -V           # Recreate node_modules volumes
+docker-compose --profile with-redis up # Include redis
 ```
 
 ### Production (Self-Hosted)
@@ -847,20 +620,15 @@ services:
 - **WebSocket**: Redis pub/sub for multi-instance scaling
 - **Reverse Proxy**: Nginx or Caddy for HTTPS
 
-**Environment Variables:**
+**Environment Variables:** See `.env.example` for the full list. Key variables:
 ```bash
-# Required
-ZOOM_CLIENT_ID=xxx
-ZOOM_CLIENT_SECRET=xxx
-DATABASE_URL=postgresql://...
-SESSION_SECRET=random_64_char_string
-
-# Optional (free tier works without)
-OPENROUTER_API_KEY=sk-or-v1-xxx
-
-# Features
-AI_ENABLED=true
-DEFAULT_MODEL=google/gemini-2.0-flash-thinking-exp:free
+ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET    # From Zoom Marketplace
+PUBLIC_URL                             # Your public HTTPS URL
+DATABASE_URL                           # Postgres connection string
+SESSION_SECRET                         # 64-char random string
+REDIS_ENCRYPTION_KEY                   # 32-char random string (token encryption)
+OPENROUTER_API_KEY                     # Optional (free models work without)
+DEFAULT_MODEL                          # Default: google/gemini-2.0-flash-thinking-exp:free
 ```
 
 ---
@@ -892,49 +660,44 @@ DEFAULT_MODEL=google/gemini-2.0-flash-thinking-exp:free
 
 ## Technology Stack Summary
 
-### Frontend
-- **Framework**: React 18, Next.js 14
-- **UI Components**: Tailwind CSS, shadcn/ui
-- **Data Fetching**: TanStack Query
+### Frontend (In-Meeting Zoom App)
+- **Framework**: React 18 (Create React App 5)
+- **UI Components**: `@base-ui/react` (unstyled, accessible) + plain CSS
+- **Styling**: CSS custom properties (design tokens in `index.css`)
 - **WebSocket**: Native WebSocket API
-- **SDK**: Zoom Apps SDK 0.16+
+- **SDK**: Zoom Apps SDK 0.16+ (`@zoom/appssdk`)
 
 ### Backend
 - **Runtime**: Node.js 20+
 - **Framework**: Express.js
-- **Language**: TypeScript
+- **Language**: JavaScript (not TypeScript)
 - **ORM**: Prisma
 - **WebSocket**: ws library
-- **Authentication**: Zoom OAuth 2.0 (PKCE)
+- **Authentication**: Zoom OAuth 2.0 (PKCE) with httpOnly session cookies
 
 ### Database
 - **Primary**: PostgreSQL 15+
-- **Features**: Full-text search (built-in)
-- **Optional**: Redis (WebSocket pub/sub)
+- **Features**: Full-text search (GIN index)
+- **Optional**: Redis (WebSocket pub/sub, profile: `with-redis`)
 
-### AI/ML
+### AI
 - **Provider**: OpenRouter
-- **Default Model**: google/gemini-2.0-flash-thinking-exp (free)
-- **Features**: RAG, summarization, extraction
+- **Default Model**: google/gemini-2.0-flash-thinking-exp (free, no API key required)
+- **Fallback**: meta-llama/llama-3.2-3b-instruct:free
+- **Features**: RAG via Postgres FTS, summarization, action items
 
 ### DevOps
 - **Containerization**: Docker + Docker Compose
-- **Reverse Proxy**: Nginx / Caddy
-- **Process Manager**: PM2 (production)
+- **RTMS**: `@zoom/rtms` v1.0.2 (requires `linux/amd64`)
 
 ---
 
 ## Next Steps
 
-See [PROJECT_STATUS.md](./PROJECT_STATUS.md) for:
-- Current implementation status
-- Feature roadmap (v0.5, v1, v2)
-- Development phases
-- Testing checklist
-- Deployment guide
+See [PROJECT_STATUS.md](./PROJECT_STATUS.md) for current implementation status and roadmap (v0.5 → v1.0 → v2.0).
 
-See individual guides:
-- [SDK_SETUP.md](./SDK_SETUP.md) - Zoom Apps SDK configuration
-- [RTMS_GUIDE.md](./RTMS_GUIDE.md) - Real-time transcript ingestion
-- [AI_INTEGRATION.md](./AI_INTEGRATION.md) - OpenRouter + RAG setup
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Self-hosting instructions
+For Zoom Apps development guidance, see the reusable skill at `/.claude/skills/zoom-apps/`:
+- `02-sdk-setup.md` — SDK initialization, capabilities, contexts
+- `05-rtms-integration.md` — RTMS SDK, WebSocket, webhook handling
+- `04-backend-oauth.md` — Express, OAuth flows, token management
+- `07-security.md` — PKCE, CSRF, encryption, headers

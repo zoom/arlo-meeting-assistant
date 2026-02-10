@@ -4,492 +4,288 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Arlo Meeting Assistant** is an open-source Zoom Apps reference implementation demonstrating how to build intelligent meeting assistants that capture real-time transcripts using RTMS (Real-Time Media Streams) - **without requiring a meeting bot**. The app runs natively inside Zoom meetings and provides AI-powered summaries, action items, and transcript search.
+**Arlo Meeting Assistant** is an open-source Zoom Apps reference implementation demonstrating how to build intelligent meeting assistants that capture real-time transcripts using RTMS (Real-Time Media Streams) — **without requiring a meeting bot**. The app runs natively inside Zoom meetings and provides AI-powered summaries, action items, and transcript search.
 
-**Key Value Proposition:** *"You don't need a bot. Build a meeting assistant AS A ZOOM APP."*
+**Current Phase:** v0.5 MVP functional, frontend UI migrated to Base UI, feature push next.
 
 ## Development Commands
 
 ### Docker Setup (Recommended)
 
 ```bash
-# Start all services (Postgres, Backend, Frontend)
-docker-compose up --build
-
-# Rebuild after adding/removing npm dependencies
-# -V recreates anonymous volumes (node_modules) from fresh image
-docker-compose up --build -V
-
-# View logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
-
-# Restart specific service
-docker-compose restart backend
-
-# Clean restart (removes ALL volumes including DB data)
-docker-compose down -v && docker-compose up --build
-
-# Stop all services
-docker-compose down
+docker-compose up --build              # Start all services (Postgres, Backend, Frontend, RTMS)
+docker-compose up --build -V           # Rebuild with fresh node_modules (use after adding/removing npm deps)
+docker-compose logs -f backend         # View backend logs
+docker-compose restart backend         # Restart specific service
+docker-compose down -v && docker-compose up --build  # Clean restart (deletes DB data)
 ```
 
 ### Manual Development
 
 ```bash
-# Terminal 1: Backend (with hot reload)
-cd backend
-npm install
-npm run dev          # Runs with nodemon for auto-restart
-
-# Terminal 2: Frontend
-cd frontend
-npm install
-npm start            # React dev server with hot reload
-
-# Terminal 3: Database (if not using Docker)
-# Install Postgres 15+ and create database
-psql -U postgres -c "CREATE DATABASE meeting_assistant;"
-
-# Run Prisma migrations
-cd backend
-npx prisma migrate dev
-
-# Terminal 4: ngrok (for local Zoom App testing)
-ngrok http 3000
-# Copy the HTTPS URL and update PUBLIC_URL in .env
+npm run dev              # Start all services concurrently (backend + frontend + rtms)
+npm run dev:backend      # Backend only (nodemon for auto-restart)
+npm run dev:frontend     # Frontend only (CRA dev server)
+npm run dev:rtms         # RTMS service only
+npm run setup            # Install all workspace dependencies
 ```
 
-### Database Commands
+### Database (Prisma)
 
 ```bash
-# Generate Prisma client after schema changes
+npm run db:migrate       # Run migrations (from root)
+npm run db:generate      # Generate Prisma client after schema changes
+npm run db:studio        # Open Prisma Studio GUI at localhost:5555
+npm run db:reset         # Reset database (WARNING: deletes all data)
+
+# Or from backend directory:
 cd backend
-npx prisma generate
-
-# Create new migration
-npx prisma migrate dev --name description_of_change
-
-# Reset database (WARNING: deletes all data)
-npx prisma migrate reset
-
-# Open Prisma Studio (database GUI)
-npx prisma studio
+npx prisma migrate dev --name description_of_change   # Create new migration
 ```
 
-### Environment Setup
+### Frontend Build
 
 ```bash
-# Copy example environment file
-cp .env.example .env
-
-# Generate secure secrets
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"  # SESSION_SECRET
-node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"  # REDIS_ENCRYPTION_KEY
-
-# After starting ngrok, update .env:
-PUBLIC_URL=https://your-ngrok-url.ngrok-free.app
-ZOOM_APP_REDIRECT_URI=https://your-ngrok-url.ngrok-free.app/api/zoomapp/auth
+cd frontend && npx react-scripts build
 ```
 
-## Architecture Overview
+### ngrok (Required for Zoom App Testing)
 
-### Three-Component System
+```bash
+ngrok http 3000                                        # Random domain (changes each restart)
+ngrok http 3000 --domain=yourname-arlo.ngrok-free.app  # Static domain (recommended)
+# Then update PUBLIC_URL in .env
+```
 
-1. **In-Meeting Zoom App** (React + Base UI + Zoom Apps SDK)
+## Architecture
+
+### Two-Component System (Currently Implemented)
+
+1. **In-Meeting Zoom App** (`frontend/`) — React 18 + Base UI + Zoom Apps SDK
    - Runs embedded in Zoom client during meetings
-   - UI built with `@base-ui/react` (unstyled, accessible components) + plain CSS
-   - Live transcript display with < 1s latency
-   - Real-time AI suggestions
+   - Live transcript display, AI suggestions, highlights
    - Start/stop RTMS via `zoomSdk.callZoomApi('startRTMS')`
 
-2. **Backend API** (Node.js/Express + Postgres)
-   - Zoom OAuth 2.0 authentication (PKCE flow)
-   - RTMS ingestion via WebSocket
-   - WebSocket server for live updates
-   - REST API for meetings/transcripts
-   - AI orchestration (OpenRouter integration)
+2. **Backend API** (`backend/`) — Node.js/Express + PostgreSQL + Prisma
+   - Zoom OAuth 2.0 (PKCE flow), session management with httpOnly cookies
+   - REST API for meetings, transcripts, search, AI, highlights
+   - WebSocket server for live transcript broadcast
+   - AI orchestration via OpenRouter (free models, no API key required)
 
-3. **Post-Meeting Web App** (Next.js)
-   - Meeting history browser
-   - Full-text transcript search
-   - Chat with transcripts (RAG)
-   - Export VTT/JSON
+3. **RTMS Service** (`rtms/`) — @zoom/rtms v1.0.2
+   - Webhook handlers for `meeting.rtms_started` / `meeting.rtms_stopped`
+   - WebSocket-based transcript ingestion from Zoom
 
-### Data Flow: RTMS → Database → Client
+**Note:** A Post-Meeting Web App (Next.js) is planned but not yet implemented.
+
+### Data Flow
 
 ```
-[Zoom RTMS WebSocket]
-        ↓
-[Backend: RTMS Ingestion Worker]
-├─ Normalize transcript events
-├─ Buffer 2-3s (reorder out-of-order segments)
-├─ Batch insert to Postgres (50-100 segments)
-└─ Broadcast via WebSocket to clients
-        ↓
-[Frontend: Live Transcript Display]
-    (< 1s end-to-end latency)
+Zoom RTMS WebSocket → RTMS Service → Backend (normalize, buffer, batch insert to Postgres)
+    → WebSocket broadcast → Frontend (live transcript display, < 1s end-to-end)
 ```
 
 ### Authentication Flow (Zoom OAuth PKCE)
 
 ```
-1. Frontend: GET /api/auth/authorize → { codeChallenge, state }
-2. Frontend: zoomSdk.authorize({ codeChallenge, state })
-3. Zoom handles OAuth UI in Zoom client
-4. SDK fires onAuthorized event → { code, state }
-5. Frontend: POST /api/auth/callback { code, state }
-6. Backend: Exchanges code for tokens (validates PKCE verifier)
-7. Backend: Stores encrypted tokens in Postgres
-8. Backend: Creates HTTPOnly session cookie
+Frontend: GET /api/auth/authorize → { codeChallenge, state }
+Frontend: zoomSdk.authorize({ codeChallenge, state })
+Zoom handles OAuth UI → SDK fires onAuthorized → { code, state }
+Frontend: POST /api/auth/callback { code, state }
+Backend: Exchanges code for tokens, stores encrypted in Postgres, creates session cookie
 ```
 
-## Key Files and Entry Points
+## Key Files
 
-### Backend
-- `backend/server.js` - Express app setup, middleware, routes
-- `backend/config.js` - Environment variable validation
-- `backend/api/zoomapp/router.js` - OAuth routes
-- `backend/api/zoomapp/controller.js` - OAuth logic (PKCE)
-- `backend/api/zoom/router.js` - Zoom REST API proxy
-- `backend/util/zoom-api.js` - Zoom API client with token refresh
-- `backend/util/zoom-helpers.js` - OAuth helpers (PKCE generation)
-- `backend/middleware.js` - Session management, security headers
+### Backend (`backend/src/`)
+- `server.js` — Express app setup, middleware, route mounting
+- `config.js` — Environment variable validation
+- `routes/auth.js` — OAuth routes (authorize, callback, me)
+- `routes/meetings.js` — Meeting CRUD and transcript endpoints
+- `routes/ai.js` — AI chat and suggestions (OpenRouter)
+- `routes/rtms.js` — RTMS webhook handlers
+- `routes/search.js` — Full-text search
+- `routes/highlights.js` — Meeting highlights/bookmarks
+- `services/auth.js` — Token management, PKCE
+- `services/openrouter.js` — LLM API client
+- `services/websocket.js` — WebSocket broadcast server
+- `middleware/auth.js` — Session authentication middleware
 
-### Frontend (Zoom App)
-- `frontend/src/App.js` - Main component, SDK configuration
-- `frontend/src/apis.js` - SDK API demonstrations
-- `frontend/src/components/Authorization.js` - OAuth flows
-- `frontend/src/index.css` - CSS design tokens (`:root` custom properties) and shared Base UI styles
-- `frontend/public/index.html` - Loads Zoom Apps SDK script
+### Frontend (`frontend/src/`)
+- `App.js` — Main component, Zoom SDK initialization
+- `index.css` — CSS design tokens (`:root` custom properties) and shared Base UI styles
+- `components/ZoomApp.js` — OAuth flow, meeting context, main app shell
+- `components/LiveTranscript.js` — Real-time transcript display
+- `components/AIPanel.js` — AI summary/actions/chat tabs
+- `components/MeetingSuggestions.js` — Duration picker, progress, AI suggestions
+- `components/MeetingHistory.js` — Past meetings list
+- `components/HighlightsPanel.js` — Meeting bookmarks
+- `components/RTMSControls.js` — Start/stop RTMS controls
+- `components/TestPage.js` — Developer test page
 
-### RTMS
-- `rtms/src/index.js` - RTMS service using @zoom/rtms v1.0 (class-based Client API, multi-meeting support)
-- Webhook handlers for `meeting.rtms_started` and `meeting.rtms_stopped`
+### RTMS (`rtms/src/`)
+- `index.js` — RTMS client using @zoom/rtms v1.0 class-based API
 
 ### Database
-- `backend/prisma/schema.prisma` - Database schema (PostgreSQL)
-- Key tables: User, Meeting, Speaker, TranscriptSegment, Highlight, VttFile
+- `backend/prisma/schema.prisma` — PostgreSQL schema
+- Key models: User, Meeting, Speaker, TranscriptSegment, Highlight, VttFile, UserToken
+- `TranscriptSegment.seqNo` is UNIQUE per meeting (idempotency)
+- Full-text search uses Postgres GIN index on `text` column
+- All queries filtered by `ownerId` (row-level data isolation)
 
 ## Frontend UI (Base UI)
 
-The frontend uses `@base-ui/react` for accessible, unstyled component primitives, styled with plain CSS and CSS custom properties (design tokens).
+The frontend uses `@base-ui/react` for accessible, unstyled components, styled with plain CSS and CSS custom properties.
 
-### Base UI Components in Use
+### Critical: CRA Import Pattern
 
-| Component | Used In | Purpose |
-|-----------|---------|---------|
-| `Tabs` | AIPanel, MeetingHistory | Tab navigation (summary/actions/chat, AI/transcript) |
-| `Collapsible` | MeetingHistory | Expandable past meetings section |
-| `Progress` | MeetingSuggestions | Meeting time progress bar |
-| `Toggle` + `ToggleGroup` | MeetingSuggestions | Duration picker (15/30/45/60/90/120 min) |
-| `ScrollArea` | LiveTranscript | Custom scrollbar for transcript |
-| `Tooltip` | MeetingSuggestions, HighlightsPanel, TestPage | Accessible tooltips replacing native `title` |
-| `AlertDialog` | TestPage | Delete confirmation dialog |
-| `Field` | HighlightsPanel | Form fields with labels and validation |
-
-### Import Pattern
-
-CRA 5 does not support package.json `exports` subpath patterns. Always import from the main entry:
+CRA 5 does NOT support package.json `exports` subpath patterns. Always import from the main entry:
 
 ```javascript
-// CORRECT - use main entry
+// CORRECT
 import { Tabs, Collapsible, Tooltip } from '@base-ui/react';
 
-// WRONG - subpath imports fail at runtime in CRA
+// WRONG — fails at runtime in CRA
 import { Tabs } from '@base-ui/react/tabs';
 ```
 
-### CSS Data Attributes
+### Base UI Components in Use
 
-Base UI exposes state via data attributes instead of class toggles:
+Tabs (AIPanel, MeetingHistory), Collapsible (MeetingHistory), Progress (MeetingSuggestions), Toggle/ToggleGroup (MeetingSuggestions), ScrollArea (LiveTranscript), Tooltip (multiple), AlertDialog (TestPage), Field (HighlightsPanel).
 
-```css
-.ai-tab[data-active] { /* selected tab */ }
-.duration-option[data-pressed] { /* selected toggle */ }
-.history-header[data-panel-open] { /* expanded collapsible */ }
-```
+### Styling Conventions
 
-### Design Tokens
+- CSS data attributes for state: `[data-active]`, `[data-pressed]`, `[data-panel-open]`
+- Design tokens in `frontend/src/index.css` under `:root` — use `var(--color-*)`, `var(--radius-*)` etc.
+- ToggleGroup uses array values even in single mode: `value={['60']}`, `onValueChange` receives array
+- Separator component not available (CRA subpath issue) — use plain `<hr>` instead
 
-CSS custom properties are defined in `frontend/src/index.css` under `:root`. All component CSS uses `var(--color-*)`, `var(--radius-*)` etc. instead of hardcoded values.
+## REST API Endpoints
 
-## Critical Configuration Requirements
+### Authentication
+- `GET /api/auth/authorize` — Get PKCE challenge for in-client OAuth
+- `POST /api/auth/callback` — Exchange code for tokens
+- `GET /api/auth/me` — Get current authenticated user
 
-### Zoom Marketplace Setup (Must Do)
+### Meetings & Transcripts
+- `GET /api/meetings` — List user's meetings (params: from, to, limit, cursor)
+- `GET /api/meetings/:id` — Meeting details
+- `GET /api/meetings/:id/transcript` — Paginated segments (params: from_ms, to_ms, limit, after_seq)
+- `GET /api/meetings/:id/vtt` — Download WebVTT file
 
-1. **Domain Allowlist** - Add `appssdk.zoom.us` to allowed domains
-2. **OAuth Redirect URL** - Configure BEFORE users can install app
-3. **RTMS Scopes** - Enable Transcripts scope minimum
-4. **SDK Capabilities** - Add all required APIs (see `.claude/skills/zoom-apps/02-sdk-setup.md`)
-5. **Home URL** - Points to your ngrok/production URL
+### AI & Search
+- `GET /api/search` — Full-text search (params: q, meeting_id, from, to)
+- `POST /api/ai/chat` — Chat with transcripts (SSE stream)
+- `POST /api/ai/suggest` — In-meeting AI suggestions
 
-### Environment Variables (Required)
-
-```bash
-# Zoom App (from Marketplace)
-ZOOM_CLIENT_ID=your_client_id
-ZOOM_CLIENT_SECRET=your_client_secret
-PUBLIC_URL=https://your-domain.com
-
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/meeting_assistant
-
-# Security (generate with crypto.randomBytes)
-SESSION_SECRET=64_char_random_string
-REDIS_ENCRYPTION_KEY=32_char_random_string
-
-# AI (Optional - free models work without key)
-OPENROUTER_API_KEY=sk-or-v1-xxx
-DEFAULT_MODEL=google/gemini-2.0-flash-thinking-exp:free
-```
-
-## Database Schema Key Points
-
-### Core Models
-
-- **User** - Zoom user, linked by `zoomUserId`
-- **Meeting** - Each meeting instance with title, timestamps, owner
-- **Speaker** - Meeting participants (linked to participants)
-- **TranscriptSegment** - Individual caption lines with timestamps
-  - Indexed by: (meetingId, seqNo), (meetingId, tStartMs)
-  - Full-text search index on `text` column
-- **Highlight** - User-created bookmarks with time ranges
-- **VttFile** - WebVTT exports linked to meetings
-
-### Important Constraints
-
-- `TranscriptSegment.seqNo` is UNIQUE per meeting (idempotency)
-- All tables have Row-Level Security (RLS) filters by ownerId
-- Full-text search uses Postgres built-in GIN index
+### Highlights
+- Routes in `backend/src/routes/highlights.js`
 
 ## WebSocket Protocol
 
-### Connection
 ```
-ws://api.example.com/ws?meeting_id={uuid}&token={jwt}
-```
-
-### Client → Server
-```javascript
-{ type: 'subscribe', meetingId: 'uuid' }
+Connection: ws://host/ws?meeting_id={uuid}&token={jwt}
+Client → Server: { type: 'subscribe', meetingId: 'uuid' }
+Server → Client: { type: 'transcript.segment', data: { meetingId, segment: {...} } }
+Server → Client: { type: 'ai.suggestion', data: { meetingId, suggestion: {...} } }
+Server → Client: { type: 'meeting.status', data: { meetingId, status: '...' } }
 ```
 
-### Server → Client Events
-```javascript
-// New transcript segment
-{
-  type: 'transcript.segment',
-  data: { meetingId, segment: { speakerId, text, tStartMs, tEndMs, seqNo } }
-}
+## Environment Variables
 
-// AI suggestion (real-time)
-{
-  type: 'ai.suggestion',
-  data: { meetingId, suggestion: { type, text, owner, tStartMs } }
-}
+Required in `.env` (copy from `.env.example`):
 
-// Meeting status change
-{
-  type: 'meeting.status',
-  data: { meetingId, status: 'rtms_started' | 'rtms_stopped' | 'completed' }
-}
+```bash
+ZOOM_CLIENT_ID=...              # From Zoom Marketplace
+ZOOM_CLIENT_SECRET=...
+PUBLIC_URL=https://...          # ngrok HTTPS URL
+DATABASE_URL=postgresql://...   # Postgres connection string
+SESSION_SECRET=...              # 64 chars: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+REDIS_ENCRYPTION_KEY=...        # 32 chars: node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+OPENROUTER_API_KEY=...          # Optional — free models work without it
+DEFAULT_MODEL=google/gemini-2.0-flash-thinking-exp:free
 ```
-
-## REST API Key Endpoints
-
-### Authentication
-- `GET /api/auth/authorize` - Get PKCE challenge for in-client OAuth
-- `POST /api/auth/callback` - Exchange code for tokens
-- `GET /api/auth/me` - Get current authenticated user
-
-### Meetings
-- `GET /api/meetings?from=&to=&limit=&cursor=` - List user's meetings
-- `GET /api/meetings/:id` - Meeting details
-- `GET /api/meetings/:id/transcript?from_ms=&to_ms=&limit=&after_seq=` - Paginated segments
-- `GET /api/meetings/:id/vtt` - Download WebVTT file
-
-### AI Features
-- `GET /api/search?q=&meeting_id=&from=&to=` - Full-text search across transcripts
-- `POST /api/ai/chat` - Chat with transcripts (Server-Sent Events stream)
-- `POST /api/ai/suggest` - Get AI suggestions (in-meeting)
-
-## AI Integration (OpenRouter)
-
-### Default Configuration (No API Key Required)
-
-```javascript
-{
-  provider: 'OpenRouter',
-  defaultModel: 'google/gemini-2.0-flash-thinking-exp:free',
-  fallbackModel: 'meta-llama/llama-3.2-3b-instruct:free',
-  rateLimits: { free: '10 req/min', premium: '100 req/min' }
-}
-```
-
-### RAG Pipeline
-
-1. User asks question → Backend receives query
-2. Full-text search on `TranscriptSegment.text` (Postgres FTS)
-3. Build context window from top results
-4. Call OpenRouter with prompt template + context
-5. Stream response via Server-Sent Events
-6. Extract citations (meeting ID + timestamp)
-7. Frontend displays with clickable timestamps
-
-### Prompt Templates (Planned)
-
-- `summary.prompt` - Meeting summary generation
-- `action-items.prompt` - Extract tasks with owners
-- `next-steps.prompt` - Suggest follow-up actions
-- `decisions.prompt` - Identify key decisions
-
-## Zoom Apps SDK Usage Patterns
-
-### Required Capabilities
-
-```javascript
-zoomSdk.config({
-  capabilities: [
-    'getMeetingContext',   // meetingUUID, participantUUID
-    'getMeetingUUID',      // Unique meeting identifier
-    'getUserContext',      // User info and auth status
-    'authorize',           // In-client OAuth
-    'onAuthorized',        // OAuth callback
-    'callZoomApi',         // For startRTMS/stopRTMS
-    'showNotification',    // User notifications
-    'onMessage'            // Multi-instance communication
-  ]
-})
-```
-
-### Starting RTMS
-
-```javascript
-await zoomSdk.callZoomApi('startRTMS', {
-  audioOptions: { rawAudio: false },
-  transcriptOptions: { caption: true }
-})
-```
-
-### OAuth Flow
-
-```javascript
-// 1. Get PKCE challenge from backend
-const { codeChallenge, state } = await fetch('/api/auth/authorize').then(r => r.json())
-
-// 2. Trigger OAuth in Zoom client
-await zoomSdk.authorize({ codeChallenge, state })
-
-// 3. Listen for completion
-zoomSdk.onAuthorized(async ({ code, state }) => {
-  await fetch('/api/auth/callback', {
-    method: 'POST',
-    body: JSON.stringify({ code, state })
-  })
-})
-```
-
-## Performance Targets
-
-| Metric | Target | Notes |
-|--------|--------|-------|
-| RTMS → DB write | < 500ms P95 | Ingestion latency |
-| DB → WebSocket client | < 300ms P95 | Broadcast latency |
-| End-to-end (RTMS → UI) | < 1s P95 | Total user-visible latency |
-| AI suggestion | < 5s P90 | Including LLM response |
-| Transcript search | < 400ms P95 | Full-text search |
-| Page load | < 2s | Including auth + data |
 
 ## Common Development Workflows
 
 ### Adding a New API Endpoint
 
-1. Define route in `backend/api/{module}/router.js`
-2. Implement handler in `backend/api/{module}/controller.js`
-3. Add authentication middleware if needed
-4. Update CORS settings if frontend needs access
-5. Document in relevant `/docs/` file
+1. Create or edit route file in `backend/src/routes/{module}.js`
+2. Add authentication middleware from `backend/src/middleware/auth.js` if needed
+3. Mount route in `backend/src/server.js`: `app.use('/api/{module}', require('./routes/{module}'))`
 
 ### Adding a New Database Table
 
 1. Update `backend/prisma/schema.prisma`
-2. Run `npx prisma migrate dev --name add_table_name`
-3. Run `npx prisma generate` to update client
-4. Implement model access in controllers
-5. Add RLS policies if user-scoped data
+2. Run `npm run db:migrate` (or `cd backend && npx prisma migrate dev --name add_table_name`)
+3. Run `npm run db:generate`
 
 ### Testing Zoom App Locally
 
-1. Start ngrok: `ngrok http 3000`
-2. Copy HTTPS URL
-3. Update `PUBLIC_URL` in `.env`
-4. Update Zoom Marketplace → Home URL
-5. Update Zoom Marketplace → OAuth Redirect URL
-6. Restart backend: `docker-compose restart backend`
-7. In Zoom client: Apps → Find your app → Open
-8. Right-click app → Inspect Element (DevTools)
+1. Start ngrok: `ngrok http 3000 --domain=your-domain.ngrok-free.app`
+2. Update `PUBLIC_URL` in `.env`
+3. Update Home URL and OAuth Redirect URL in Zoom Marketplace
+4. `docker-compose restart backend`
+5. In Zoom: Apps → Find your app → Open
+6. Right-click app → Inspect Element (DevTools)
 
-### Debugging RTMS Issues
+## Zoom Marketplace Setup (Required)
 
-1. Check webhook delivery in Zoom Marketplace → Feature → Event Subscriptions
-2. View backend logs: `docker-compose logs -f backend | grep RTMS`
-3. Verify RTMS scopes enabled in Marketplace
-4. Check WebSocket connection in browser DevTools → Network → WS
-5. Verify segments written to database: `npx prisma studio`
+1. **Domain Allowlist** — Add `appssdk.zoom.us`
+2. **OAuth Redirect URL** — `https://{your-domain}/api/auth/callback`
+3. **RTMS Scopes** — Enable Transcripts (requires RTMS access approval from Zoom)
+4. **SDK Capabilities** — See `.claude/skills/zoom-apps/02-sdk-setup.md`
+5. **Home URL** — Your ngrok/production URL
+6. **Event Subscriptions** — `meeting.rtms_started`, `meeting.rtms_stopped`
 
-## Security Considerations
+## Security
 
-### Token Management
-- Access tokens stored **encrypted** in Postgres (AES-256)
-- Auto-refresh 5 minutes before expiry
-- Never expose tokens to frontend
-- Use httpOnly cookies for sessions
+- Access tokens stored **encrypted** (AES-256) in Postgres, auto-refresh before expiry
+- httpOnly session cookies, never expose tokens to frontend
+- All API calls from frontend use `fetch` with `credentials: 'include'`
+- HTTP headers required by Zoom Apps: `Strict-Transport-Security`, `X-Content-Type-Options`, `Content-Security-Policy`, `Referrer-Policy`
 
-### Data Isolation
-- All queries filtered by `owner_id` (Row-Level Security)
-- User can only access their own meetings
-- Webhook signature validation on incoming events
+## Project Structure
 
-### HTTP Security Headers (Required)
-```javascript
-// These headers are REQUIRED by Zoom Apps platform
-'Strict-Transport-Security': 'max-age=31536000'
-'X-Content-Type-Options': 'nosniff'
-'Content-Security-Policy': "default-src 'self'; script-src 'self' appssdk.zoom.us"
-'Referrer-Policy': 'strict-origin-when-cross-origin'
+```
+arlo-meeting-assistant/
+├── backend/           # Express API (npm workspace)
+│   ├── src/
+│   │   ├── server.js
+│   │   ├── config.js
+│   │   ├── routes/    # auth, meetings, ai, rtms, search, highlights
+│   │   ├── services/  # auth, openrouter, websocket
+│   │   └── middleware/ # auth
+│   └── prisma/
+│       └── schema.prisma
+├── frontend/          # React Zoom App (npm workspace, CRA)
+│   ├── public/
+│   │   └── index.html # Loads Zoom Apps SDK script
+│   └── src/
+│       ├── App.js
+│       ├── index.css  # Design tokens
+│       └── components/ # 8 components (ZoomApp, LiveTranscript, AIPanel, etc.)
+├── rtms/              # RTMS transcript ingestion (npm workspace)
+│   └── src/index.js
+├── docs/              # Project documentation
+│   ├── ARCHITECTURE.md
+│   ├── PROJECT_STATUS.md
+│   └── TROUBLESHOOTING.md
+├── .claude/skills/zoom-apps/  # Reusable Zoom Apps development guides (8 docs)
+├── docker-compose.yml
+├── .env.example
+└── package.json       # Root workspace config
 ```
 
 ## Documentation Reference
 
-### Zoom Apps Development Skill (Reusable)
+- `.claude/skills/zoom-apps/` — General Zoom Apps development guides (SDK, OAuth, RTMS, security)
+- `/docs/ARCHITECTURE.md` — System architecture details
+- `/docs/PROJECT_STATUS.md` — Roadmap and phase tracking
+- `/docs/TROUBLESHOOTING.md` — Common issues and fixes
 
-For **general Zoom Apps development guidance**, see the skill at `.claude/skills/zoom-apps/`:
+## Known Issues
 
-| Document | Topics |
-|----------|--------|
-| `01-getting-started.md` | Marketplace setup, ngrok, environment config |
-| `02-sdk-setup.md` | SDK initialization, capabilities, contexts |
-| `03-frontend-patterns.md` | React patterns, OAuth flows, multi-instance |
-| `04-backend-oauth.md` | Express, OAuth flows, token management |
-| `05-rtms-integration.md` | RTMS SDK, WebSocket, webhook handling |
-| `06-rest-api.md` | API proxy, common endpoints, pagination |
-| `07-security.md` | PKCE, CSRF, encryption, headers |
-| `08-sdk-reference.md` | Complete SDK API reference |
-
-### Project-Specific Documentation
-
-The `/docs/` directory contains Arlo-specific documentation:
-
-- **ARCHITECTURE.md** - Arlo Meeting Assistant system architecture
-- **PROJECT_STATUS.md** - Roadmap (v0.5 → v1.0 → v2.0)
-- **TROUBLESHOOTING.md** - Arlo-specific issues and fixes
-
-**Reference the skill docs** for general Zoom Apps patterns, and project docs for Arlo-specific implementation details.
-
-## Project Status
-
-**Current Phase:** Frontend UI migration to Base UI complete, feature push next
-**Tech Stack:** React 18 + Base UI + CRA 5, Node.js/Express backend, PostgreSQL, @zoom/rtms v1.0
-
-See `/docs/PROJECT_STATUS.md` for detailed roadmap and phase breakdowns.
+- Pre-existing lint warnings in `ZoomApp.js` (missing deps in useEffect, unused var) — not to be fixed unless asked
+- No automated tests exist yet (manual testing only)
+- Frontend uses CRA (react-scripts), NOT Next.js
