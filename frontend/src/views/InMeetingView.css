@@ -1,0 +1,213 @@
+.in-meeting-view {
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Header */
+.in-meeting-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.live-indicator-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Transcript states */
+.transcript-state-card .transcript-state-inner {
+  padding: 48px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.in-meeting-tab-panel {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Transcript active container (controls + card) */
+.transcript-active-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Transcription controls bar */
+.transcript-controls-card {
+  /* Card handles border/radius */
+}
+
+.transcript-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.transcript-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transcript-status .live-dot-container .live-dot,
+.transcript-status .live-dot-container .live-dot-ping {
+  background: var(--accent);
+}
+
+.paused-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+}
+
+.transcript-controls-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Live transcript */
+.transcript-live-card {
+  position: relative;
+}
+
+.transcript-scroll-root {
+  position: relative;
+}
+
+.transcript-viewport {
+  height: 500px;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.transcript-entry {
+  margin-bottom: 16px;
+}
+
+.transcript-entry:last-child {
+  margin-bottom: 0;
+}
+
+.transcript-entry-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.transcript-timestamp {
+  flex-shrink: 0;
+}
+
+.transcript-text {
+  padding-left: 64px;
+  line-height: 1.6;
+}
+
+/* Suggestion bubbles */
+.suggestion-bubbles {
+  position: absolute;
+  bottom: 64px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.suggestion-bubble {
+  background: var(--card);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.suggestion-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.suggestion-inner span {
+  flex: 1;
+}
+
+.suggestion-dismiss {
+  background: none;
+  border: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  transition: color 0.15s;
+}
+
+.suggestion-dismiss:hover {
+  color: var(--foreground);
+}
+
+/* Scroll to live */
+.scroll-to-live {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.scroll-to-live .btn {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Assist tab */
+.assist-card {
+  /* Card handles border/radius */
+}
+
+.assist-card-inner {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.assist-notes {
+  min-height: 150px;
+  resize: none;
+}
+
+.action-items-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.action-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.action-item:last-child {
+  border-bottom: none;
+}
+
+.add-action-row {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+}

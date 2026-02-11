@@ -63,6 +63,7 @@ model Meeting {
   endTime       DateTime? @map("end_time")
   duration      Int? // milliseconds
   status        String    @default("ongoing") // 'ongoing' | 'completed' | 'failed'
+  summary       Json?     // Cached AI summary (overview, keyPoints, decisions, nextSteps)
   language      String    @default("en")
   timezone      String    @default("UTC")
   ownerId       String    @map("owner_id")

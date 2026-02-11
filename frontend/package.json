@@ -8,8 +8,10 @@
     "@base-ui/react": "^1.1.0",
     "@zoom/appssdk": "^0.16.0",
     "axios": "^1.6.5",
+    "lucide-react": "^0.563.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-router-dom": "^6.30.3",
     "react-scripts": "5.0.1"
   },
   "scripts": {

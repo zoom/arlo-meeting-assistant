@@ -63,6 +63,7 @@ model Meeting {
   endTime       DateTime? @map("end_time")
   duration      Int? // milliseconds
   status        String    @default("ongoing") // 'ongoing' | 'completed' | 'failed'
+  summary       Json?     // Cached AI summary (overview, keyPoints, decisions, nextSteps)
   language      String    @default("en")
   timezone      String    @default("UTC")
   ownerId       String    @map("owner_id")
@@ -112,8 +113,8 @@ model TranscriptSegment {
   meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   speakerId  String?  @map("speaker_id")
   speaker    Speaker? @relation(fields: [speakerId], references: [id], onDelete: SetNull)
-  tStartMs   Int      @map("t_start_ms") // Timestamp start (milliseconds)
-  tEndMs     Int      @map("t_end_ms") // Timestamp end (milliseconds)
+  tStartMs   BigInt   @map("t_start_ms") // Timestamp start (microseconds from Zoom)
+  tEndMs     BigInt   @map("t_end_ms") // Timestamp end (microseconds from Zoom)
   seqNo      BigInt   @map("seq_no") // Sequence number for ordering
   text       String   @db.Text
   confidence Float? // Speech-to-text confidence (0.0 - 1.0)

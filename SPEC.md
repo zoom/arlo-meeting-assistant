@@ -1,199 +1,306 @@
-# Arlo Meeting Assistant — Specification
+# Arlo — v1.0 Implementation Spec
 
-An open-source Zoom Apps reference implementation that demonstrates how to build intelligent meeting assistants using Real-Time Media Streams (RTMS) — **without requiring a meeting bot**. The app runs natively inside Zoom meetings and provides live transcription, AI-powered summaries, action items, transcript search, and more.
+## Overview
 
-This document is the authoritative feature specification for contributors and forkers.
+Arlo is an open-source AI meeting assistant that runs as an embedded web app inside Zoom meetings. It receives real-time transcripts via Zoom's Realtime Media Streams (RTMS) product, stores them in a database, and provides LLM-generated summaries, action items, and meeting intelligence. The app runs in Zoom's embedded browser panel (Zoom Apps SDK).
 
----
-
-## Current State (v0.9)
-
-Feature inventory organized by component. Each feature is marked **WORKING** (implemented and functional) or **STUB** (placeholder, not yet implemented).
-
-### In-Meeting Zoom App
-
-| Feature | Status |
-|---------|--------|
-| Live transcript display via RTMS WebSocket | WORKING |
-| Start/Stop RTMS controls | WORKING |
-| AI Summary (`POST /api/ai/summary`) | WORKING |
-| AI Action Items (`POST /api/ai/action-items`) | WORKING |
-| AI Chat Q&A (`POST /api/ai/chat`) | WORKING |
-| Auto-suggestions at configurable meeting duration | WORKING |
-| Meeting history with transcript viewing | WORKING |
-| Meeting highlights CRUD | WORKING |
-| Full-text search across transcripts | WORKING |
-| VTT export | WORKING |
-| Meeting rename / delete | WORKING |
-| Real-time in-meeting suggestions (`POST /api/ai/suggest`) | STUB |
-
-### Backend API
-
-| Feature | Status |
-|---------|--------|
-| Zoom OAuth 2.0 (PKCE, in-client flow) | WORKING |
-| Encrypted token storage (AES-256) with auto-refresh | WORKING |
-| Session management (httpOnly cookies) | WORKING |
-| Meeting CRUD (list, detail, rename, delete) | WORKING |
-| Transcript storage with idempotent writes (`seqNo` unique) | WORKING |
-| AI orchestration via OpenRouter (free models) | WORKING |
-| WebSocket broadcast server (per-meeting rooms) | WORKING |
-| Full-text search with PostgreSQL GIN index | WORKING |
-| WebVTT generation and download | WORKING |
-| Highlights CRUD with timestamps and tags | WORKING |
-| AI status endpoint | WORKING |
-
-### RTMS Service
-
-| Feature | Status |
-|---------|--------|
-| @zoom/rtms v1.0.2 class-based Client API | WORKING |
-| Webhook handlers (`meeting.rtms_started` / `meeting.rtms_stopped`) | WORKING |
-| Multi-meeting support (per-meeting Client instances) | WORKING |
-| Transcript normalization, buffering, batch insert | WORKING |
+This document defines the target v1.0 implementation. Use it to audit the current codebase, identify gaps, and guide build-out.
 
 ---
 
-## Version Milestones
+## Technical Context
 
-| Version | Label | Scope |
-|---------|-------|-------|
-| **v0.9** | Current | Everything listed as WORKING above |
-| **v1.0** | Production Ready | Implement `POST /api/ai/suggest` (real-time suggestions), automated tests, CI pipeline, demo video, security audit, GitHub issue templates, end-to-end fresh install test |
-| **v1.5** | Standalone Web App | Post-meeting web experience (Next.js or similar): landing page, meeting browser, transcript viewer, dashboard with chat |
-| **v2.0** | Enterprise | Video recording + replay, background task extraction, vector embeddings (pgvector), multi-language, team/workspace features, calendar integration, risk/compliance signals, public sharing links |
+**Runtime environment:** Embedded web browser inside Zoom desktop client (macOS and Windows). Not a standalone web app — it runs within Zoom's iframe-like container and has access to the Zoom Apps SDK.
 
----
+**Viewport constraints:**
+- Default width: 372px
+- Max width: 900px (macOS), 800px (Windows)
+- Height: Variable, determined by the user's Zoom window size. Typical range: 500–700px. Can be taller.
+- Layout: Fluid between 372px and max width. No fixed breakpoints.
+- Mobile: Not in scope.
 
-## Tech Stack
-
-| Component | Choice | Notes |
-|-----------|--------|-------|
-| Frontend | React 18 + CRA 5 | In-meeting Zoom App |
-| UI Library | `@base-ui/react` + plain CSS | Unstyled, accessible components; CSS custom properties for design tokens |
-| Zoom SDK | `@zoom/appssdk` 0.16+ | In-client OAuth, RTMS initiation |
-| Backend | Node.js 20+ / Express.js (JavaScript) | REST API + WebSocket server |
-| Database | PostgreSQL 15+ | Full-text search (GIN index), JSON support |
-| ORM | Prisma | Migrations, type-safe client |
-| AI Provider | OpenRouter | Free models (Gemini Flash), no API key required |
-| RTMS | `@zoom/rtms` v1.0.2 | Class-based Client API, requires `linux/amd64` |
-| WebSocket | `ws` library | Real-time transcript broadcast |
-| Containerization | Docker Compose | Postgres, Backend, Frontend, RTMS services |
-| Auth | Zoom OAuth 2.0 (PKCE) | httpOnly session cookies, encrypted tokens |
+**Key integrations:**
+- **Zoom Apps SDK** — Provides meeting context (current meeting UUID, user role, participant list). Used to determine if the app is running inside a meeting and whether the user is the host.
+- **Zoom OAuth** — Authentication. Users connect their Zoom account to authorize Arlo.
+- **RTMS (Realtime Media Streams)** — Server-side transcript ingestion. The client reads transcript availability from app state, not directly from RTMS.
+- **LLM service** — Generates summaries, highlights, action items, suggestion nudges, and answers to "Ask about this meeting" queries. Implementation details of the LLM layer are outside this spec.
+- **Database** — Stores transcripts, meeting metadata, participants, and LLM-generated content.
 
 ---
 
-## Data Model
+## Theming & Styling
 
-Core Prisma models defined in `backend/prisma/schema.prisma`:
-
-| Model | Purpose |
-|-------|---------|
-| **User** | Zoom user, linked by `zoomUserId` |
-| **UserToken** | Encrypted OAuth tokens (AES-256), auto-refresh |
-| **Meeting** | Meeting instance with title, timestamps, status, owner |
-| **Speaker** | Meeting participants with labels and roles |
-| **TranscriptSegment** | Caption lines with BigInt timestamps, `@@unique([meetingId, seqNo])` for idempotency |
-| **VttFile** | WebVTT export file references |
-| **Highlight** | User-created bookmarks with time ranges and tags |
-| **AiSession** | AI chat session |
-| **AiMessage** | Chat messages (user/assistant/system) with optional search filters |
-| **AiCitation** | Transcript citations linked to AI messages |
-
-All tables use `@@map()` for snake_case naming. All user-scoped tables cascade delete from User/Meeting. Row-level data isolation via `ownerId` filtering on all queries.
+- **Typography:** Source Serif 4 (serif) for headings and body content. Clean sans-serif (Inter or system font stack) for UI chrome: buttons, labels, metadata, tabs.
+- **Color palette:** Near-monochrome with one accent color. Minimal, editorial aesthetic.
+- **Dark mode:** Support light and dark themes. Provide a toggle in the app header. Persist preference.
+- **Design tokens:** If the Figma Make output includes design tokens (colors, spacing, type scale), reference the mockups in `/design/` and extract values. Otherwise, derive from the mockups.
+- **Loading states:** Minimal SVG spinners or skeleton placeholders for async content.
+- **Error handling:** Toast notifications for errors (RTMS disconnects, LLM failures, network issues). Non-blocking, auto-dismiss, manually dismissible.
 
 ---
 
-## API Reference
+## Navigation & Layout Shell
 
-### Authentication
+### App Shell
 
-| Method | Path | Status | Description |
-|--------|------|--------|-------------|
-| GET | `/api/auth/authorize` | WORKING | Get PKCE challenge for in-client OAuth |
-| POST | `/api/auth/callback` | WORKING | Exchange authorization code for tokens |
-| GET | `/api/auth/me` | WORKING | Get current authenticated user |
+Persistent header across all authenticated views:
 
-### Meetings & Transcripts
+```
+[← Back] [Page Title / Arlo Icon]          [🔍] [🌓] [⚙]
+```
 
-| Method | Path | Status | Description |
-|--------|------|--------|-------------|
-| GET | `/api/meetings` | WORKING | List user's meetings (params: `from`, `to`, `limit`, `cursor`) |
-| GET | `/api/meetings/:id` | WORKING | Meeting details |
-| PATCH | `/api/meetings/:id` | WORKING | Rename meeting |
-| DELETE | `/api/meetings/:id` | WORKING | Delete meeting (cascades) |
-| GET | `/api/meetings/:id/transcript` | WORKING | Paginated segments (params: `from_ms`, `to_ms`, `limit`, `after_seq`) |
-| GET | `/api/meetings/:id/vtt` | WORKING | Download WebVTT file |
+- **Left:** Back arrow (when drilled into a sub-view) or Arlo icon/name (at Home root).
+- **Right:** Search icon, theme toggle, settings gear.
+- **Search:** At 372px, the search icon expands into a full-width input field overlay. Search queries transcript content across all meetings. Results display as a dropdown list of matching meetings — tapping a result navigates to that meeting's detail view.
 
-### Search
+### Navigation Model
 
-| Method | Path | Status | Description |
-|--------|------|--------|-------------|
-| GET | `/api/search` | WORKING | Full-text search (params: `q`, `meeting_id`, `from`, `to`) |
+Back-arrow drill-down. No persistent tab bar or sidebar. The navigation hierarchy:
 
-### AI
+```
+/ (Auth — unauthenticated root)
+├── /guest (Guest — no meeting context)
+├── /guest/{currentMeetingUUID} (Guest — in meeting)
+├── /home (Home — authenticated root)
+│   ├── /meetings (Meetings List)
+│   │   └── /meetings/[meetingID] (Meeting Detail)
+│   ├── /meeting/{currentMeetingUUID} (In-Meeting — live)
+│   └── /settings (Settings)
+```
 
-| Method | Path | Status | Description |
-|--------|------|--------|-------------|
-| POST | `/api/ai/summary` | WORKING | Generate meeting summary |
-| POST | `/api/ai/action-items` | WORKING | Extract action items from transcript |
-| POST | `/api/ai/chat` | WORKING | Chat with transcripts (SSE stream, RAG) |
-| POST | `/api/ai/suggest` | STUB | Real-time in-meeting suggestions |
-| GET | `/api/ai/status` | WORKING | AI service status and model info |
+### "Return to Live Transcript" Banner
 
-### Highlights
+When the user is in an active meeting (determined by Zoom Apps SDK meeting context) and navigates away from the In-Meeting view to Home, Meetings List, or Meeting Detail, display a sticky banner below the header:
 
-| Method | Path | Status | Description |
-|--------|------|--------|-------------|
-| POST | `/api/meetings/:id/highlights` | WORKING | Create highlight |
-| GET | `/api/meetings/:id/highlights` | WORKING | List highlights for meeting |
-| PATCH | `/api/highlights/:id` | WORKING | Update highlight |
-| DELETE | `/api/highlights/:id` | WORKING | Delete highlight |
+```
+[🔴 Return to live transcript                          →]
+```
 
-### WebSocket
-
-| Event | Direction | Description |
-|-------|-----------|-------------|
-| `subscribe` | Client -> Server | Subscribe to meeting transcript feed |
-| `transcript.segment` | Server -> Client | New caption line |
-| `ai.suggestion` | Server -> Client | Real-time AI insight |
-| `meeting.status` | Server -> Client | RTMS started/stopped/completed |
-
-Connection: `ws://host/ws?meeting_id={uuid}&token={jwt}`
-
-### RTMS Webhooks
-
-| Method | Path | Status | Description |
-|--------|------|--------|-------------|
-| POST | `/api/rtms/webhook` | WORKING | Handles `meeting.rtms_started` and `meeting.rtms_stopped` events |
+- Tapping navigates back to `/meeting/{currentMeetingUUID}`.
+- Dismiss automatically when the meeting ends (meeting context clears).
+- Do not show on `/guest/*` routes or when no meeting is active.
 
 ---
 
-## Architecture Overview
+## Routes & View Specifications
 
-Three-component system:
+### Route: `/` — Logged-Out / Authorization
 
-1. **In-Meeting Zoom App** (`frontend/`) — React SPA running embedded in the Zoom client. Handles OAuth, live transcript display, AI panels, highlights, search.
+**Access:** Unauthenticated only. Redirect authenticated users to `/home`.
 
-2. **Backend API** (`backend/`) — Express server providing REST API, WebSocket broadcast, RTMS webhook handling, AI orchestration, and session management.
+**Rendering:**
+- Arlo owl icon and app name, centered.
+- One or two lines of value proposition copy.
+- Single CTA button: **"Connect with Zoom"** → initiates Zoom OAuth flow.
+- No header, no navigation. Standalone landing page.
 
-3. **RTMS Service** (`rtms/`) — Dedicated transcript ingestion worker using `@zoom/rtms` SDK. Receives raw transcript events from Zoom, normalizes and buffers them, batch-inserts to Postgres, and forwards to WebSocket broadcast.
-
-**Data flow:** Zoom RTMS -> RTMS Service -> Backend (normalize, buffer, batch insert) -> WebSocket broadcast -> Frontend (< 1s end-to-end latency).
-
-For detailed architecture diagrams, data flow, deployment options, and security model, see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+**Implementation notes:**
+- Auth flow uses Zoom OAuth. Architect the auth layer so it can be extended to other OAuth providers (this is an OSS app meant to be forked).
+- On successful OAuth callback, redirect to `/home`.
 
 ---
 
-## Scope Boundaries
+### Route: `/guest` — Guest Mode (No Meeting Context)
 
-Explicitly **out of scope** for this project:
+**Access:** Unauthenticated users not currently in a meeting with active Arlo data.
 
-- Production infrastructure (Terraform, Kubernetes, managed hosting)
-- Multi-tenant / SaaS architecture
-- Billing, subscriptions, or payment processing
-- Video capture, recording, or replay
-- Mobile app
-- SSO beyond Zoom OAuth
-- Custom AI model hosting (uses OpenRouter as a proxy)
-- Automated CI/CD pipeline (v1.0 goal)
+**Rendering:**
+- Brief explanation copy: "Arlo helps you capture meeting context with AI."
+- CTA button: **"Install Arlo"** → navigates to Zoom OAuth / app install flow.
+- No meeting data displayed.
+
+**Routing logic:** The app determines guest vs. auth state on load. If the user is unauthenticated and no `currentMeetingUUID` is available with active transcript data, render this route.
+
+---
+
+### Route: `/guest/{currentMeetingUUID}` — Guest Mode (In Meeting)
+
+**Access:** Unauthenticated users who are in a meeting where the host (an authenticated Arlo user) has active transcript data.
+
+**Rendering:**
+- LLM-generated summary of the current meeting. This is a periodically refreshed summary (not real-time streaming). Poll or re-fetch on an interval.
+- CTA button: **"Install Arlo"** prominently placed.
+- Read-only. No interactive features beyond reading the summary and clicking install.
+
+**Data dependency:** Requires that the meeting's transcript data is accessible to the server and that an LLM summary has been generated or can be generated on demand.
+
+---
+
+### Route: `/home` — Home
+
+**Access:** Authenticated. This is the default landing for logged-in users.
+
+**Rendering (content hierarchy, top to bottom):**
+
+1. **This week's highlights** — LLM-generated highlight cards summarizing meetings from the current week. Each highlight is a brief, scannable card.
+2. **Reminders from yesterday** — Takeaways and reminders from the previous day's meetings, derived from transcript data.
+3. **View all meetings** — Link or button navigating to `/meetings`.
+
+**Empty state:** When no meetings exist, replace highlights and reminders with a centered message: *"No meetings yet — Connect your Zoom account or start Arlo in a meeting."*
+
+**Data dependencies:**
+- List of meetings from the current week with LLM-generated summaries/highlights.
+- List of meetings from yesterday with LLM-generated takeaways.
+- Meeting count (to determine empty state).
+
+---
+
+### Route: `/meetings` — Meetings List
+
+**Access:** Authenticated.
+
+**Rendering:**
+- Compact card list, reverse chronological order (newest first).
+- Each meeting card displays: **Title**, **Date**, **Duration**, **Participant display names** (truncate with "+N more" if many), **"View" button** → navigates to `/meetings/[meetingID]`.
+- **Live indicator:** If a meeting is currently active (match against current meeting context from Zoom Apps SDK), display a **"Live" badge** on that card. Tapping the card navigates to `/meeting/{currentMeetingUUID}` (In-Meeting view), not the static Meeting Detail.
+- Paginate or infinite scroll if the list is long.
+
+**Empty state:** *"Use Arlo in meetings to start capturing context."*
+
+**Data dependencies:**
+- All meetings for the authenticated user, ordered by date descending.
+- Current meeting context (to flag live meetings).
+
+---
+
+### Route: `/meetings/[meetingID]` — Meeting Detail
+
+**Access:** Authenticated.
+
+**Layout:** Meeting header (title, date, duration) at top, then a tabbed interface below.
+
+**Tabs:**
+
+#### Tab 1: Summary
+- AI-generated meeting summary.
+- **"Ask about this meeting"** input — inline below the summary. Single-question interface: user submits a question, the LLM response renders inline below the input, expanding the section. Input resets for another question. Not a persistent chat history — one question/answer pair visible at a time.
+
+#### Tab 2: Transcript / Timeline
+- Full scrollable transcript. Each entry: **speaker label**, **timestamp**, **text**.
+- Search within transcript — input at top of the tab, highlights matching terms, "jump to next/previous hit" controls.
+- If the meeting is currently live (meetingID matches active meeting context), enable **follow-live mode** by default. Scroll position locks to the latest entry. Scrolling up detaches follow-live. A **"Scroll to live" button** appears anchored at the bottom of the transcript container to re-attach.
+
+#### Tab 3: Participants
+- List of participants by display name (no avatars).
+- Per participant: attendance (join/leave times or total duration), speaking duration.
+
+#### Tab 4: Highlights & Tasks
+- AI-generated takeaways as a list.
+- Action items table:
+
+| Owner | Task | Due | Source |
+|-------|------|-----|--------|
+
+- **Source** is a timestamp that, when clicked, switches to the Transcript tab and scrolls to that timestamp.
+
+**Export (below tabs or in the header area):**
+- Two buttons: **"Export VTT"** and **"Export MD"**.
+- VTT export: Generate a WebVTT file from the transcript data.
+- MD export: Generate a Markdown file including summary, highlights, action items, and transcript.
+
+---
+
+### Route: `/meeting/{currentMeetingUUID}` — In-Meeting (Live)
+
+**Access:** Authenticated. Only renders when the Zoom Apps SDK reports the app is running inside an active meeting.
+
+**Routing logic:** On app load, check `zoomSdk.getMeetingContext()` (or equivalent). If a meeting is active, route to this view. If the user manually navigates here without an active meeting, redirect to `/home`.
+
+**Layout:** Meeting header (meeting title from Zoom context), then two tabs.
+
+#### Tab 1: Transcript
+- Live-scrolling transcript with speaker labels and timestamps.
+- **Follow-live mode:** On by default. Scrolling up detaches. **"Scroll to live" button** anchored at the bottom of the transcript area to re-attach.
+- **Suggestion bubbles:** Real-time LLM-generated nudges (e.g., "Summarize the last 5 minutes," "This sounds like a commitment — capture it?"). Render as small dismissible chips/bubbles overlaid at the bottom of the transcript area, above the "Scroll to live" button. Informational only — no action on tap beyond dismiss (X button). New suggestions push older ones out or stack with a limit (e.g., max 2–3 visible).
+
+#### Tab 2: Arlo Assist
+- **Notes:** LLM-generated draft meeting notes, displayed as markdown-formatted bullets. User-editable (contenteditable or textarea).
+- **Action Items:** LLM-captured commitments with owner assignment. Owner is selected from the meeting's participant list. Simple list format — each item: owner, task description, optional due.
+
+#### Pre-Transcript States
+
+Before transcript data is flowing, the In-Meeting view replaces the tabbed content with one of three states based on client-readable app state:
+
+**State 1 — Host, transcription not started:**
+- The user is the meeting host (from Zoom Apps SDK context).
+- Transcript data has not started flowing (from client app state).
+- Render: Centered prompt with button: **"Start Transcription"**.
+- Action: Triggers the RTMS transcription start flow.
+
+**State 2 — Non-host, transcription not started:**
+- The user is not the host.
+- Transcript data has not started flowing.
+- Render: Centered prompt with button: **"Request Transcript Access"**.
+- Action: Sends a request (implementation TBD — may be an in-meeting notification to the host or an API call). After tapping, transition to State 3.
+
+**State 3 — Non-host, waiting:**
+- The user has requested access or is waiting for the host to start.
+- Render: *"Waiting for host to start transcription."* with a subtle loading indicator (spinner or pulsing dot).
+
+**Transition:** When transcript data begins flowing (detected via client state polling or WebSocket/SSE event), automatically transition from any pre-transcript state to the live transcript tab view.
+
+**Note on auto-start:** The host may have configured auto-start transcription in their Zoom web settings (external to Arlo). In this case, transcript data may already be flowing when the app opens — skip pre-transcript states entirely and render the live transcript.
+
+---
+
+### Route: `/settings` — Settings
+
+**Access:** Authenticated.
+
+**Rendering:** Two sections, both in a disabled/placeholder state:
+
+1. **Preferences** — Disabled. Muted styling with placeholder text: *"Preferences coming soon."*
+2. **Account** — Disabled. Same treatment: *"Account management coming soon."*
+
+Both sections should use disabled UI patterns (reduced opacity, non-interactive controls, muted text) to communicate "planned but not yet active."
+
+---
+
+## Global Component Inventory
+
+These components are used across multiple views and should be implemented as reusable:
+
+| Component | Used In | Description |
+|-----------|---------|-------------|
+| **AppShell / Header** | All authenticated routes | Persistent header with back nav, search, theme toggle, settings |
+| **SearchOverlay** | Home, Meetings List, In-Meeting | Expands from icon, queries transcripts, returns meeting list dropdown |
+| **ThemeToggle** | Header | Light/dark mode switch, persists preference |
+| **ReturnToLiveBanner** | All authenticated routes (conditional) | Sticky banner when user navigates away from active In-Meeting view |
+| **MeetingCard** | Meetings List, Home (highlights) | Compact card: title, date, duration, participants, live badge |
+| **TabBar** | Meeting Detail, In-Meeting | Horizontal tab navigation within a view |
+| **TranscriptViewer** | Meeting Detail (Tab 2), In-Meeting (Tab 1) | Scrollable transcript with speaker labels, timestamps, search, follow-live |
+| **FollowLiveButton** | TranscriptViewer | "Scroll to live" anchored button, appears when detached from live scroll |
+| **SuggestionBubble** | In-Meeting (Tab 1) | Dismissible overlay chip for LLM nudges |
+| **AskInput** | Meeting Detail (Tab 1) | Single-question input with inline expandable response |
+| **ActionItemsTable** | Meeting Detail (Tab 4), In-Meeting (Tab 2) | Owner / Task / Due / Source table |
+| **ExportButtons** | Meeting Detail | "Export VTT" and "Export MD" buttons |
+| **EmptyState** | Home, Meetings List | Centered message with contextual copy |
+| **Toast** | Global | Error/info notifications, auto-dismiss |
+| **LoadingIndicator** | Global | SVG spinner or skeleton placeholder |
+
+---
+
+## State & Routing Logic Summary
+
+```
+On app load:
+├── Is user authenticated?
+│   ├── NO → Is there an active meeting with Arlo data?
+│   │   ├── YES → /guest/{currentMeetingUUID}
+│   │   └── NO  → /guest (or / for first-time auth)
+│   └── YES → Is the app inside an active meeting?
+│       ├── YES → /meeting/{currentMeetingUUID}
+│       │   └── Is transcript data flowing?
+│       │       ├── YES → Render live transcript tabs
+│       │       └── NO  → Is user the host?
+│       │           ├── YES → "Start Transcription" prompt
+│       │           └── NO  → "Request Access" / "Waiting" state
+│       └── NO  → /home
+```
+
+Key client-side state to track:
+- **Auth state:** Authenticated vs. guest vs. unauthenticated.
+- **Meeting context:** From Zoom Apps SDK — is a meeting active? What is the meeting UUID? Is the user the host?
+- **Transcript state:** Is transcript data currently flowing for this meeting? (Polled from server or pushed via WebSocket/SSE.)
+- **Theme preference:** Light or dark. Persisted in localStorage or equivalent.
+- **Active meeting flag:** Used to conditionally render the "Return to live transcript" banner across non-In-Meeting views.

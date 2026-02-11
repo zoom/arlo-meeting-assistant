@@ -79,19 +79,21 @@ async function handleRTMSStarted(payload) {
     const client = new rtms.Client();
 
     // Set up transcript data handler BEFORE joining
-    // v1.0 callback signature: (data, timestamp, metadata) — no `size` param
-    client.onTranscriptData((data, timestamp, metadata) => {
+    // v1.0 callback signature: (data, timestamp, metadata, user)
+    // user: { userId, userName }
+    client.onTranscriptData((data, timestamp, metadata, user) => {
       try {
         const text = data.toString('utf-8');
         console.log('Raw transcript event:');
         console.log(`  Text: ${text}`);
         console.log(`  Timestamp: ${timestamp}`);
-        console.log(`  Metadata:`, JSON.stringify(metadata, null, 2));
+        console.log(`  User:`, user);
 
         const transcriptData = {
           text,
           timestamp,
-          ...metadata
+          userId: user?.userId,
+          userName: user?.userName,
         };
 
         handleTranscript(meeting_uuid, transcriptData).catch(err => {
@@ -200,25 +202,16 @@ async function handleRTMSStopped(payload) {
 async function handleTranscript(meetingId, transcript) {
   console.log('Transcript:', transcript);
 
-  const {
-    participant_id,
-    sequence,
-    timestamp_start,
-    timestamp_end,
-    text,
-    confidence,
-    userName,
-    userId,
-  } = transcript;
+  const { text, timestamp, userId, userName } = transcript;
 
   // FIRST: Broadcast immediately to frontend (don't wait for DB)
   const segment = {
-    speakerId: participant_id || String(userId) || 'unknown',
-    speakerLabel: userName || `Speaker ${userId || 'Unknown'}`,
+    speakerId: userId ? String(userId) : 'unknown',
+    speakerLabel: userName || (userId ? `Speaker ${userId}` : 'Speaker'),
     text: text || '',
-    tStartMs: timestamp_start || transcript.timestamp || 0,
-    tEndMs: timestamp_end || 0,
-    seqNo: sequence || Date.now(),
+    tStartMs: Date.now(),
+    tEndMs: 0,
+    seqNo: Date.now(),
   };
 
   // Broadcast to frontend immediately
@@ -235,20 +228,15 @@ async function handleTranscript(meetingId, transcript) {
     if (!meeting) {
       // For RTMS-created meetings, we need a system user or skip the owner requirement
       // First, try to find or create a system user
-      let systemUser = await prisma.user.findFirst({
-        where: { email: 'system@arlo.local' },
+      let systemUser = await prisma.user.upsert({
+        where: { zoomUserId: 'system' },
+        update: {},
+        create: {
+          zoomUserId: 'system',
+          email: 'system@arlo.local',
+          displayName: 'System',
+        },
       });
-
-      if (!systemUser) {
-        systemUser = await prisma.user.create({
-          data: {
-            zoomUserId: 'system',
-            email: 'system@arlo.local',
-            displayName: 'System',
-          },
-        });
-        console.log(`Created system user: ${systemUser.id}`);
-      }
 
       meeting = await prisma.meeting.create({
         data: {
@@ -284,9 +272,9 @@ async function handleTranscript(meetingId, transcript) {
     }
 
     // Save transcript segment
-    // Note: RTMS sends timestamps in microseconds, convert to milliseconds
-    const tStartMs = Math.floor((segment.tStartMs || 0) / 1000);
-    const tEndMs = Math.floor((segment.tEndMs || segment.tStartMs || 0) / 1000);
+    // tStartMs is Date.now() (epoch milliseconds), store directly
+    const tStartMs = segment.tStartMs || 0;
+    const tEndMs = segment.tEndMs || tStartMs;
 
     // Use upsert to handle duplicates (both RTMS and backend may try to save)
     await prisma.transcriptSegment.upsert({

@@ -1,0 +1,81 @@
+.home-view {
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Meeting in progress card */
+.home-meeting-card {
+  background: color-mix(in srgb, var(--accent) 5%, var(--card));
+  border-color: var(--accent);
+}
+
+.home-meeting-inner {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.home-meeting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.home-start-btn {
+  width: 100%;
+}
+
+.home-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+}
+
+.home-empty {
+  text-align: center;
+  padding: 48px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.home-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.home-section-title {
+  font-size: 1.125rem;
+}
+
+.home-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.home-highlight-card {
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.home-highlight-card:hover {
+  background: var(--muted);
+}
+
+.home-card-inner {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.home-view-all-btn {
+  width: 100%;
+}

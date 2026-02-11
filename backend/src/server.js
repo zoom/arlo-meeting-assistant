@@ -23,6 +23,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "appssdk.zoom.us", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
+      fontSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "wss:", "https:"],
       frameSrc: ["'self'", "appssdk.zoom.us"],
@@ -75,6 +76,7 @@ app.use('/api/search', require('./routes/search'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/rtms', require('./routes/rtms'));
 app.use('/api/highlights', require('./routes/highlights'));
+app.use('/api/home', require('./routes/home'));
 
 // =============================================================================
 // FRONTEND PROXY (with friendly startup page)

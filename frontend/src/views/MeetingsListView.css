@@ -1,0 +1,25 @@
+.meetings-list-view {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.meetings-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+}
+
+.meetings-empty {
+  text-align: center;
+  padding: 48px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.meetings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

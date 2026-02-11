@@ -41,6 +41,9 @@ router.get('/', async (req, res) => {
     const meetings = await prisma.meeting.findMany({
       where,
       include: {
+        speakers: {
+          select: { id: true, displayName: true, label: true },
+        },
         _count: {
           select: {
             segments: true,
@@ -258,6 +261,104 @@ function formatVTTTime(ms) {
 
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
 }
+
+/**
+ * GET /api/meetings/:id/export/markdown
+ * Export meeting transcript as Markdown file
+ */
+router.get('/:id/export/markdown', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const meeting = await prisma.meeting.findUnique({
+      where: { id },
+      include: {
+        speakers: true,
+        highlights: true,
+        segments: {
+          orderBy: { seqNo: 'asc' },
+          include: { speaker: true },
+        },
+      },
+    });
+
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+
+    // Build Markdown content
+    let md = `# ${meeting.title}\n\n`;
+
+    const dateStr = new Date(meeting.startTime).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const durationMs = meeting.duration ||
+      (meeting.endTime ? new Date(meeting.endTime) - new Date(meeting.startTime) : null);
+    const durationMin = durationMs ? Math.round(durationMs / 60000) : null;
+
+    md += `**Date:** ${dateStr}`;
+    if (durationMin) md += ` | **Duration:** ${durationMin} min`;
+    md += '\n\n';
+
+    // Participants
+    if (meeting.speakers.length > 0) {
+      md += `## Participants\n\n`;
+      meeting.speakers.forEach((s) => {
+        md += `- ${s.displayName || s.label}\n`;
+      });
+      md += '\n';
+    }
+
+    // Summary (cached)
+    if (meeting.summary) {
+      md += `## Summary\n\n`;
+      if (meeting.summary.overview) {
+        md += `${meeting.summary.overview}\n\n`;
+      }
+      if (meeting.summary.keyPoints?.length > 0) {
+        md += `### Key Points\n\n`;
+        meeting.summary.keyPoints.forEach((p) => { md += `- ${p}\n`; });
+        md += '\n';
+      }
+    }
+
+    // Highlights
+    if (meeting.highlights.length > 0) {
+      md += `## Highlights\n\n`;
+      meeting.highlights.forEach((h) => {
+        md += `- **${h.title}**`;
+        if (h.notes) md += `: ${h.notes}`;
+        md += '\n';
+      });
+      md += '\n';
+    }
+
+    // Transcript
+    if (meeting.segments.length > 0) {
+      md += `## Transcript\n\n`;
+      meeting.segments.forEach((seg) => {
+        const speaker = seg.speaker?.displayName || seg.speaker?.label || 'Speaker';
+        const ms = Number(seg.tStartMs);
+        const mins = Math.floor(ms / 60000);
+        const secs = Math.floor((ms % 60000) / 1000);
+        const ts = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        md += `**[${ts}] ${speaker}:** ${seg.text}\n\n`;
+      });
+    }
+
+    const filename = `${meeting.title.replace(/[^a-z0-9]/gi, '_')}_transcript.md`;
+    res.setHeader('Content-Type', 'text/markdown');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(md);
+  } catch (error) {
+    console.error('Markdown export error:', error);
+    res.status(500).json({ error: 'Failed to export transcript' });
+  }
+});
 
 /**
  * DELETE /api/meetings/:id

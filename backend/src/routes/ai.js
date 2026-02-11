@@ -98,10 +98,30 @@ router.post('/summary', async (req, res) => {
       return res.status(400).json({ error: 'No transcript available for this meeting' });
     }
 
+    // Check for cached summary first
+    if (meeting.summary) {
+      return res.json({
+        meetingId: meeting.id,
+        title: meeting.title,
+        summary: meeting.summary,
+        cached: true,
+      });
+    }
+
     console.log(`🤖 Generating summary for meeting: ${meeting.title}`);
 
     // Generate summary
     const summary = await generateSummary(transcript, meeting.title);
+
+    // Cache the summary
+    try {
+      await prisma.meeting.update({
+        where: { id: meeting.id },
+        data: { summary },
+      });
+    } catch (cacheErr) {
+      console.warn('Failed to cache summary:', cacheErr.message);
+    }
 
     res.json({
       meetingId: meeting.id,
@@ -242,31 +262,44 @@ router.post('/chat', async (req, res) => {
   }
 });
 
+// Rate limit: one suggest call per meeting per 5 minutes
+const suggestRateLimit = new Map();
+
 /**
  * POST /api/ai/suggest
  * Get real-time AI suggestions during meeting (for in-meeting use)
  */
 router.post('/suggest', async (req, res) => {
-  const { transcript, context } = req.body;
+  const { meetingId, recentTranscript } = req.body;
 
   if (!config.aiEnabled) {
     return res.status(503).json({ error: 'AI features are disabled' });
   }
 
-  if (!transcript) {
-    return res.status(400).json({ error: 'transcript is required' });
+  if (!recentTranscript) {
+    return res.status(400).json({ error: 'recentTranscript is required' });
   }
 
-  // For now, return a simple placeholder
-  // This would be expanded for real-time suggestions
-  res.json({
-    suggestions: [
-      {
-        type: 'info',
-        text: 'AI suggestions will appear here during the meeting',
-      },
-    ],
-  });
+  // Rate limit per meeting
+  if (meetingId) {
+    const lastCall = suggestRateLimit.get(meetingId);
+    if (lastCall && Date.now() - lastCall < 300000) {
+      return res.status(429).json({ error: 'Too many requests. Wait 5 minutes.' });
+    }
+    suggestRateLimit.set(meetingId, Date.now());
+  }
+
+  try {
+    const { generateSuggestions } = require('../services/openrouter');
+
+    const suggestions = await generateSuggestions(recentTranscript);
+
+    res.json({ suggestions });
+  } catch (error) {
+    console.error('Suggest error:', error.message);
+    // Fall back to empty suggestions on error
+    res.json({ suggestions: [] });
+  }
 });
 
 /**

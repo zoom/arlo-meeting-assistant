@@ -104,19 +104,9 @@ function LiveTranscript({ ws, rtmsActive, meetingId }) {
 }
 
 function formatTimestamp(ms) {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-
-  const mm = String(minutes % 60).padStart(2, '0');
-  const ss = String(seconds % 60).padStart(2, '0');
-
-  if (hours > 0) {
-    const hh = String(hours).padStart(2, '0');
-    return `${hh}:${mm}:${ss}`;
-  }
-
-  return `${mm}:${ss}`;
+  const date = new Date(ms);
+  if (isNaN(date.getTime()) || ms === 0) return '--:--';
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 export default LiveTranscript;

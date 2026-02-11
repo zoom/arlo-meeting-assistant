@@ -1,0 +1,31 @@
+.guest-no-meeting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.guest-content {
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+.guest-text {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.guest-text p {
+  line-height: 1.6;
+}
+
+.guest-btn {
+  width: 100%;
+}

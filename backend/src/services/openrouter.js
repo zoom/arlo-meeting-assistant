@@ -188,9 +188,38 @@ Question: ${question}`;
   }
 }
 
+/**
+ * Generate real-time meeting suggestions
+ * @param {string} recentTranscript - Last few minutes of transcript
+ * @returns {Promise<array>} Array of suggestion objects
+ */
+async function generateSuggestions(recentTranscript) {
+  const systemPrompt = `You are a real-time meeting assistant. Based on the recent transcript, generate 1-2 brief, actionable suggestions or observations.
+Examples: "Clarify the timeline for the feature release", "Assign an owner for the database migration task"
+Format as JSON array: [{"type": "suggestion", "text": "brief text"}]
+Only output valid JSON array.`;
+
+  const prompt = `Recent transcript:\n\n${recentTranscript}`;
+
+  try {
+    const response = await callOpenRouter(prompt, systemPrompt, { maxTokens: 256 });
+    const cleaned = response.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+    try {
+      const parsed = JSON.parse(cleaned);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  } catch (error) {
+    console.error('Suggestions generation failed:', error.message);
+    return [];
+  }
+}
+
 module.exports = {
   callOpenRouter,
   generateSummary,
   extractActionItems,
   chatWithTranscript,
+  generateSuggestions,
 };

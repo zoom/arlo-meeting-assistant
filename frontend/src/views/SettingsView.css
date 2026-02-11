@@ -1,0 +1,21 @@
+.settings-view {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.settings-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-card-inner {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-disabled {
+  opacity: 0.5;
+}

@@ -1,0 +1,54 @@
+.live-meeting-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  cursor: pointer;
+  position: sticky;
+  top: 49px; /* below header */
+  z-index: 40;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+
+.live-meeting-banner:hover {
+  opacity: 0.95;
+}
+
+.live-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-dot-container {
+  position: relative;
+  width: 8px;
+  height: 8px;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--accent-foreground);
+  border-radius: 50%;
+}
+
+.live-dot-ping {
+  position: absolute;
+  inset: 0;
+  width: 8px;
+  height: 8px;
+  background: var(--accent-foreground);
+  border-radius: 50%;
+  animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+  opacity: 0.75;
+}
+
+.live-banner-link {
+  font-size: 0.75rem;
+}
