@@ -144,6 +144,7 @@ export function MeetingProvider({ children }) {
   // Wait for rtmsActive so the meeting record exists in the DB before patching
   useEffect(() => {
     const topic = meetingContext?.meetingTopic;
+    const meetingNumber = meetingContext?.meetingID;
     if (!rtmsActive || !meetingId || !topic || titleSentRef.current) return;
     titleSentRef.current = true;
 
@@ -153,7 +154,7 @@ export function MeetingProvider({ children }) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ title: topic }),
+        body: JSON.stringify({ title: topic, meetingNumber }),
       }).then(res => {
         // Meeting record may not exist yet — retry after delay (max 3 attempts)
         if (res.status === 404 && ++attempts < 3) {

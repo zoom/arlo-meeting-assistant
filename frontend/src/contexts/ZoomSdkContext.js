@@ -74,6 +74,10 @@ export function ZoomSdkProvider({ children }) {
               meetingUUID = meeting.meetingUUID || meeting.meetingId || meeting.uuid || meeting.id;
             }
             meetingData = { ...meetingData, ...meeting };
+            // Capture the numeric meeting ID (e.g. "123-456-789") if available
+            if (meeting?.meetingID) {
+              meetingData.meetingID = meeting.meetingID;
+            }
           } catch {
             // Could not get meeting context
           }

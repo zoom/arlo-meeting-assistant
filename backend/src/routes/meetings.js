@@ -75,7 +75,7 @@ router.get('/', optionalAuth, async (req, res) => {
 router.patch('/by-zoom-id/:zoomMeetingId/topic', optionalAuth, async (req, res) => {
   try {
     const { zoomMeetingId } = req.params;
-    const { title } = req.body;
+    const { title, meetingNumber } = req.body;
 
     if (!title || title.trim().length === 0) {
       return res.status(400).json({ error: 'Title is required' });
@@ -90,18 +90,30 @@ router.patch('/by-zoom-id/:zoomMeetingId/topic', optionalAuth, async (req, res) 
       return res.status(404).json({ error: 'Meeting not found' });
     }
 
-    // Only update if current title matches the generic date pattern
+    // Build update data
+    const data = {};
+
+    // Only update title if current title matches the generic date pattern
     const genericPattern = /^Meeting \d{1,2}\/\d{1,2}\/\d{2,4}$/;
-    if (!genericPattern.test(meeting.title)) {
+    if (genericPattern.test(meeting.title)) {
+      data.title = title.trim();
+    }
+
+    // Store the numeric meeting number if provided and not already set
+    if (meetingNumber && !meeting.zoomMeetingNumber) {
+      data.zoomMeetingNumber = String(meetingNumber);
+    }
+
+    if (Object.keys(data).length === 0) {
       return res.json({ meeting, updated: false });
     }
 
     const updated = await prisma.meeting.update({
       where: { id: meeting.id },
-      data: { title: title.trim() },
+      data,
     });
 
-    console.log(`Updated meeting title: "${meeting.title}" → "${updated.title}"`);
+    console.log(`Updated meeting: title="${meeting.title}" → "${updated.title}", meetingNumber=${updated.zoomMeetingNumber || 'n/a'}`);
     res.json({ meeting: updated, updated: true });
   } catch (error) {
     console.error('Update meeting topic error:', error);

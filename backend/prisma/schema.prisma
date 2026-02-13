@@ -56,9 +56,10 @@ model UserToken {
 // =============================================================================
 
 model Meeting {
-  id            String    @id @default(uuid())
-  zoomMeetingId String    @map("zoom_meeting_id")
-  title         String
+  id                String    @id @default(uuid())
+  zoomMeetingId     String    @map("zoom_meeting_id") // Stores the meeting UUID (per-instance)
+  zoomMeetingNumber String?   @map("zoom_meeting_number") // Numeric meeting ID shown in Zoom UI
+  title             String
   startTime     DateTime  @map("start_time")
   endTime       DateTime? @map("end_time")
   duration      Int? // milliseconds
@@ -79,6 +80,7 @@ model Meeting {
 
   @@index([ownerId, startTime])
   @@index([zoomMeetingId])
+  @@index([zoomMeetingNumber])
   @@index([status])
   @@map("meetings")
 }
