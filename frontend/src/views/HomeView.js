@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mic } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { useMeeting } from '../contexts/MeetingContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -9,6 +10,7 @@ import './HomeView.css';
 
 export default function HomeView() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { meetingId, rtmsActive, rtmsLoading, startRTMS } = useMeeting();
   const [highlights, setHighlights] = useState([]);
   const [reminders, setReminders] = useState([]);
@@ -58,8 +60,16 @@ export default function HomeView() {
   const hasContent = highlights.length > 0 || reminders.length > 0;
   const showMeetingInProgress = meetingId && !rtmsActive;
 
+  const firstName = user?.displayName?.split(' ')[0];
+
   return (
     <div className="home-view">
+      <div className="home-greeting">
+        <h1 className="text-serif text-2xl">
+          {firstName ? `Hi, ${firstName}` : 'Welcome'}
+        </h1>
+      </div>
+
       {showMeetingInProgress && (
         <Card className="home-meeting-card">
           <div className="home-meeting-inner">

@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [wsToken, setWsToken] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -23,18 +25,25 @@ export function AuthProvider({ children }) {
     return null;
   }, []);
 
-  const login = useCallback((userData) => {
+  // Restore session from cookie on mount
+  useEffect(() => {
+    checkAuth().finally(() => setIsLoading(false));
+  }, [checkAuth]);
+
+  const login = useCallback((userData, token) => {
     setUser(userData);
     setIsAuthenticated(true);
+    if (token) setWsToken(token);
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     setIsAuthenticated(false);
+    setWsToken(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, checkAuth, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, wsToken, isLoading, checkAuth, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

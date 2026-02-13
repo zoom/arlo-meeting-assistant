@@ -6,6 +6,10 @@
   gap: 24px;
 }
 
+.home-greeting {
+  padding-top: 8px;
+}
+
 /* Meeting in progress card */
 .home-meeting-card {
   background: color-mix(in srgb, var(--accent) 5%, var(--card));

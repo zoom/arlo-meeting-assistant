@@ -5,6 +5,7 @@ import { ArrowDown, X, Sparkles, Pause, Play, Square } from 'lucide-react';
 import { useMeeting } from '../contexts/MeetingContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useZoomSdk } from '../contexts/ZoomSdkContext';
+import useZoomAuth from '../hooks/useZoomAuth';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Textarea from '../components/ui/Textarea';
@@ -21,8 +22,9 @@ function formatTimestamp(ms) {
 export default function InMeetingView() {
   useParams(); // id available from route but meetingId comes from context
   const { ws, rtmsActive, rtmsLoading, startRTMS, stopRTMS, meetingId, connectWebSocket } = useMeeting();
-  const { isAuthenticated, login } = useAuth();
-  const { zoomSdk, userContext, meetingContext, isTestMode, runningContext } = useZoomSdk();
+  const { isAuthenticated, wsToken } = useAuth();
+  const { meetingContext, isTestMode, runningContext } = useZoomSdk();
+  const { authorize } = useZoomAuth();
 
   const [segments, setSegments] = useState([]);
   const [followLive, setFollowLive] = useState(true);
@@ -33,54 +35,21 @@ export default function InMeetingView() {
   const [newTask, setNewTask] = useState('');
   const transcriptRef = useRef(null);
 
-  // Auth flow for in-meeting (mirrors ZoomApp.js logic)
+  // Auto-authenticate when entering meeting without a session
   const authAttemptedRef = useRef(false);
   useEffect(() => {
     if (isTestMode || isAuthenticated || authAttemptedRef.current) return;
-    if (runningContext !== 'inMeeting' || !userContext || !meetingContext?.meetingUUID) return;
+    if (runningContext !== 'inMeeting' || !meetingContext?.meetingUUID) return;
 
     authAttemptedRef.current = true;
+    authorize().catch((err) => console.error('Auth error:', err));
+  }, [isTestMode, isAuthenticated, runningContext, meetingContext, authorize]);
 
-    async function authenticate() {
-      try {
-        if (userContext?.status === 'authorized') {
-          login({
-            displayName: userContext.screenName,
-            participantId: userContext.participantId,
-          });
-          connectWebSocket(null, meetingContext.meetingUUID);
-          return;
-        }
-
-        const response = await fetch('/api/auth/authorize');
-        const { codeChallenge, state } = await response.json();
-        await zoomSdk.authorize({ codeChallenge, state });
-
-        zoomSdk.onAuthorized(async (event) => {
-          const { code, state: returnedState } = event;
-          const callbackResponse = await fetch('/api/auth/callback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ code, state: returnedState }),
-          });
-          const data = await callbackResponse.json();
-          login(data.user);
-          connectWebSocket(data.wsToken, meetingContext.meetingUUID);
-        });
-      } catch (error) {
-        console.error('Auth error:', error);
-      }
-    }
-
-    authenticate();
-  }, [isTestMode, isAuthenticated, runningContext, userContext, meetingContext, zoomSdk, login, connectWebSocket]);
-
-  // Ensure WebSocket is connected when already authenticated (e.g. navigated from Home)
+  // Connect WebSocket when authenticated and meeting is available
   useEffect(() => {
     if (!isAuthenticated || ws || !meetingId) return;
-    connectWebSocket(null, meetingId);
-  }, [isAuthenticated, ws, meetingId, connectWebSocket]);
+    connectWebSocket(wsToken, meetingId);
+  }, [isAuthenticated, ws, meetingId, wsToken, connectWebSocket]);
 
   // Auto-start RTMS
   const autoStartRef = useRef(false);

@@ -37,7 +37,7 @@ function generateState() {
  * Encrypt access token for storage
  */
 function encryptToken(token) {
-  const algorithm = 'aes-256-cbc';
+  const algorithm = 'aes-128-cbc';
   const key = Buffer.from(config.encryptionKey, 'hex');
   const iv = crypto.randomBytes(16);
 
@@ -53,7 +53,7 @@ function encryptToken(token) {
  * Decrypt access token from storage
  */
 function decryptToken(encryptedToken) {
-  const algorithm = 'aes-256-cbc';
+  const algorithm = 'aes-128-cbc';
   const key = Buffer.from(config.encryptionKey, 'hex');
 
   const [ivHex, encrypted] = encryptedToken.split(':');

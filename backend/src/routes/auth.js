@@ -76,14 +76,27 @@ router.post('/callback', async (req, res) => {
 
     const { access_token, refresh_token, expires_in, scope } = tokenResponse.data;
 
-    // Get user info
-    const userResponse = await axios.get('https://api.zoom.us/v2/users/me', {
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-      },
-    });
-
-    const zoomUser = userResponse.data;
+    // Get user info — try API first, fall back to JWT decoding if scope is missing
+    let zoomUser;
+    try {
+      const userResponse = await axios.get('https://api.zoom.us/v2/users/me', {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      });
+      zoomUser = userResponse.data;
+    } catch (apiError) {
+      // Decode the JWT access token to extract user ID when user:read scope is missing
+      const tokenPayload = JSON.parse(Buffer.from(access_token.split('.')[1], 'base64').toString());
+      console.log('Falling back to JWT token payload for user info:', tokenPayload);
+      zoomUser = {
+        id: tokenPayload.uid,
+        email: tokenPayload.email || `${tokenPayload.uid}@zoom.user`,
+        first_name: tokenPayload.first_name || 'Zoom',
+        last_name: tokenPayload.last_name || 'User',
+        pic_url: null,
+      };
+    }
 
     // Create or update user
     const user = await prisma.user.upsert({

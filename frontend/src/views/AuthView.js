@@ -2,16 +2,19 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useZoomSdk } from '../contexts/ZoomSdkContext';
+import useZoomAuth from '../hooks/useZoomAuth';
 import OwlIcon from '../components/OwlIcon';
 import Button from '../components/ui/Button';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 import './AuthView.css';
 
 export default function AuthView() {
   const navigate = useNavigate();
-  const { isAuthenticated, login } = useAuth();
-  const { zoomSdk, userContext, isTestMode } = useZoomSdk();
+  const { isAuthenticated, isLoading, login } = useAuth();
+  const { isTestMode } = useZoomSdk();
+  const { authorize, isAuthorizing, error } = useZoomAuth();
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated (e.g. session restored from cookie)
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/home', { replace: true });
@@ -28,42 +31,23 @@ export default function AuthView() {
 
   const handleConnect = async () => {
     try {
-      // Check if user is already authorized via Zoom SDK
-      if (userContext?.status === 'authorized') {
-        login({
-          displayName: userContext.screenName,
-          participantId: userContext.participantId,
-        });
-        navigate('/home', { replace: true });
-        return;
-      }
-
-      // Get PKCE challenge from backend
-      const response = await fetch('/api/auth/authorize');
-      const { codeChallenge, state } = await response.json();
-
-      // Trigger Zoom OAuth
-      await zoomSdk.authorize({ codeChallenge, state });
-
-      // Listen for authorization
-      zoomSdk.onAuthorized(async (event) => {
-        const { code, state: returnedState } = event;
-
-        const callbackResponse = await fetch('/api/auth/callback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ code, state: returnedState }),
-        });
-
-        const data = await callbackResponse.json();
-        login(data.user);
-        navigate('/home', { replace: true });
-      });
-    } catch (error) {
-      console.error('Authentication error:', error);
+      await authorize();
+      navigate('/home', { replace: true });
+    } catch (err) {
+      console.error('Authentication error:', err);
     }
   };
+
+  // Show spinner while session is being restored
+  if (isLoading) {
+    return (
+      <div className="auth-view">
+        <div className="auth-content">
+          <LoadingSpinner size={48} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-view">
@@ -77,8 +61,14 @@ export default function AuthView() {
           </p>
         </div>
 
-        <Button size="lg" onClick={handleConnect} className="auth-btn">
-          Connect with Zoom
+        {error && (
+          <p className="text-sm" style={{ color: 'var(--color-danger, #ef4444)' }}>
+            {error}
+          </p>
+        )}
+
+        <Button size="lg" onClick={handleConnect} disabled={isAuthorizing} className="auth-btn">
+          {isAuthorizing ? 'Connecting...' : 'Connect with Zoom'}
         </Button>
       </div>
     </div>
