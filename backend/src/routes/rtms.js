@@ -205,9 +205,9 @@ async function saveTranscriptSegment(zoomMeetingId, segment) {
     }
   }
 
-  // RTMS sends timestamps in microseconds, convert to milliseconds
-  const tStartMs = Math.floor((segment.tStartMs || 0) / 1000);
-  const tEndMs = Math.floor((segment.tEndMs || 0) / 1000);
+  // RTMS service sends timestamps in milliseconds (Date.now())
+  const tStartMs = segment.tStartMs || 0;
+  const tEndMs = segment.tEndMs || tStartMs;
 
   // Save transcript segment (upsert to handle duplicates)
   await prisma.transcriptSegment.upsert({
@@ -220,15 +220,15 @@ async function saveTranscriptSegment(zoomMeetingId, segment) {
     create: {
       meetingId: dbMeetingId,
       speakerId: speaker?.id,
-      tStartMs: tStartMs, // Converted to milliseconds
-      tEndMs: tEndMs,     // Converted to milliseconds
+      tStartMs: tStartMs,
+      tEndMs: tEndMs,
       seqNo: BigInt(segment.seqNo || Date.now()),
       text: segment.text || '',
       confidence: segment.confidence,
     },
     update: {
       text: segment.text || '',
-      tEndMs: tEndMs, // Converted to milliseconds
+      tEndMs: tEndMs,
     },
   });
 

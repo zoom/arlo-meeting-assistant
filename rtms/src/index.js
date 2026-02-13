@@ -205,13 +205,14 @@ async function handleTranscript(meetingId, transcript) {
   const { text, timestamp, userId, userName } = transcript;
 
   // FIRST: Broadcast immediately to frontend (don't wait for DB)
+  const now = Date.now();
   const segment = {
     speakerId: userId ? String(userId) : 'unknown',
     speakerLabel: userName || (userId ? `Speaker ${userId}` : 'Speaker'),
     text: text || '',
-    tStartMs: Date.now(),
-    tEndMs: 0,
-    seqNo: Date.now(),
+    tStartMs: timestamp ? Math.floor(timestamp / 1000) : now, // Zoom sends microseconds, convert to ms
+    tEndMs: timestamp ? Math.floor(timestamp / 1000) : now,   // Same as start (updated on next segment)
+    seqNo: now,
   };
 
   // Broadcast to frontend immediately
