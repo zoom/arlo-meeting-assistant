@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./docs/assets/arlo-the-owl.png" alt="Arlo the Owl" width="200"/>
+<img src="./docs/assets/Screenshot.png" alt="Arlo the meeting assistant" width="720"/>
 
 # Arlo Meeting Assistant 🦉
 
