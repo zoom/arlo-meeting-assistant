@@ -1,7 +1,7 @@
 # Arlo Meeting Assistant — Project Status
 
-**Last Updated:** 2026-02-10
-**Version:** v0.9
+**Last Updated:** 2026-02-12
+**Version:** v1.0
 **Spec:** See [`/SPEC.md`](../SPEC.md) for the authoritative feature specification and version milestones.
 
 ---
@@ -10,7 +10,7 @@
 
 Open-source Zoom Apps starter kit for building intelligent meeting assistants using RTMS (Real-Time Media Streams) — no meeting bot required.
 
-**Current state:** Nearly all planned features are implemented and working. The main gap is real-time in-meeting suggestions (`POST /api/ai/suggest`), which is stubbed. See [SPEC.md](../SPEC.md) for the full feature inventory.
+**Current state:** The v1.0 UI overhaul is complete. The frontend has been decomposed from a monolithic component into a multi-view architecture with HashRouter, 9 views, 5 context providers, and a shared AppShell. In-client OAuth PKCE is working, OS dark mode detection is implemented, and new API endpoints support the home dashboard. See [SPEC.md](../SPEC.md) for the full feature inventory.
 
 ---
 
@@ -21,6 +21,9 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
 | **Runtime** | Node.js 20+ | Best ecosystem for Zoom SDK and RTMS |
 | **Frontend** | React 18 + CRA 5 | Industry standard, Zoom App compatible |
 | **UI Library** | `@base-ui/react` + plain CSS | Unstyled, accessible, CSS custom properties |
+| **Routing** | `react-router-dom@6` (HashRouter) | Hash-based routing safe for Zoom iframe |
+| **Icons** | `lucide-react` | Lightweight, tree-shakeable icon library |
+| **Fonts** | Source Serif 4 + Inter (self-hosted) | Zoom WebView blocks Google CDN fonts |
 | **Backend** | Express.js (JavaScript) | Simple, flexible, well-documented |
 | **Database** | PostgreSQL 15+ | Full-text search (GIN index), JSON support |
 | **ORM** | Prisma | Type-safe, great migrations, modern |
@@ -42,11 +45,11 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
 
 ## Code Statistics
 
-- **Backend:** ~2,000 lines (6 route files, 3 services, middleware) — JavaScript/Express
-- **Frontend:** ~1,300 lines (8 components) — React 18 + `@base-ui/react` + plain CSS
-- **RTMS:** ~400 lines (ingestion worker) — @zoom/rtms v1.0.2
+- **Backend:** ~2,850 lines (7 route files, 3 services, middleware) — JavaScript/Express
+- **Frontend:** ~3,200 lines (9 views, 5 contexts, 1 hook, 6 UI primitives, 7 shared components) — React 18 + `@base-ui/react` + plain CSS
+- **RTMS:** ~370 lines (ingestion worker) — @zoom/rtms v1.0.2
 - **Documentation:** 15+ guides including reusable Zoom Apps skills
-- **Total:** ~3,500+ lines of production-quality code
+- **Total:** ~6,400+ lines of production-quality code
 
 ---
 
@@ -66,10 +69,17 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
 - WebVTT export
 - Frontend UI migration to `@base-ui/react` (Feb 2026)
 - README, ARCHITECTURE.md, TROUBLESHOOTING.md, CLAUDE.md
+- **v1.0 multi-view architecture** — HashRouter, 9 views, 5 context providers, AppShell with shared header
+- **In-client OAuth PKCE flow** — `useZoomAuth` hook, session restoration via `GET /api/auth/me`, JWT fallback
+- **OS dark mode detection** with localStorage override and theme toggle
+- **Self-hosted fonts** — Source Serif 4 + Inter WOFF2 files (Zoom WebView blocks Google CDN)
+- **New API endpoints** — `/api/home/highlights`, `/api/home/reminders`, `/api/ai/summary`, `/api/meetings/:id/export/markdown`
+- **UI primitives** — Button, Card, Badge, Input, Textarea, LoadingSpinner
+- **LiveMeetingBanner** — "Return to live transcript" sticky banner
+- **MeetingCard** — Reusable meeting card component with live badge support
 
 ### Not Yet Done
 
-- Real-time in-meeting suggestions (`POST /api/ai/suggest`) — currently a stub
 - Automated tests (manual testing only)
 - CI pipeline
 - Demo video
@@ -82,13 +92,12 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
 
 ## Next Actions
 
-1. [ ] Implement `POST /api/ai/suggest` or mark as "Coming Soon" in UI
-2. [ ] End-to-end testing on fresh install
+1. [ ] End-to-end testing on fresh install
+2. [ ] Add basic smoke tests
 3. [ ] Add GitHub issue templates
-4. [ ] Add basic smoke tests
-5. [ ] Create demo video
-6. [ ] Security audit (OWASP checklist)
-7. [ ] Public launch
+4. [ ] Create demo video
+5. [ ] Security audit (OWASP checklist)
+6. [ ] Public launch
 
 ---
 

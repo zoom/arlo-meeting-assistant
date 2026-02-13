@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Arlo Meeting Assistant** is an open-source Zoom Apps reference implementation demonstrating how to build intelligent meeting assistants that capture real-time transcripts using RTMS (Real-Time Media Streams) — **without requiring a meeting bot**. The app runs natively inside Zoom meetings and provides AI-powered summaries, action items, and transcript search.
 
-**Current Phase:** v0.9 — see [`SPEC.md`](./SPEC.md) for the full feature specification and version milestones.
+**Current Phase:** v1.0 — see [`SPEC.md`](./SPEC.md) for the full feature specification and version milestones.
 
 ## Development Commands
 
@@ -87,13 +87,21 @@ Zoom RTMS WebSocket → RTMS Service → Backend (normalize, buffer, batch inser
 
 ### Authentication Flow (Zoom OAuth PKCE)
 
+Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — single source of truth for auth.
+
 ```
-Frontend: GET /api/auth/authorize → { codeChallenge, state }
-Frontend: zoomSdk.authorize({ codeChallenge, state })
-Zoom handles OAuth UI → SDK fires onAuthorized → { code, state }
-Frontend: POST /api/auth/callback { code, state }
-Backend: Exchanges code for tokens, stores encrypted in Postgres, creates session cookie
+1. Frontend: GET /api/auth/authorize → { codeChallenge, state }
+2. Frontend: Register onAuthorized listener BEFORE calling authorize() (avoids race condition)
+3. Frontend: zoomSdk.authorize({ codeChallenge, state })
+4. Zoom fires onAuthorized → { code } (NOTE: SDK does NOT return state — use closure from step 1)
+5. Frontend: POST /api/auth/callback { code, state } (credentials: 'include')
+6. Backend: Exchanges code for tokens, stores AES-128-CBC encrypted in Postgres, creates session cookie
+7. Frontend: login(user, wsToken) → navigate to /home
 ```
+
+**Session restoration:** On app load, `AuthContext` calls `GET /api/auth/me` to restore session from httpOnly cookie. A loading spinner displays during this check to prevent auth-screen flash.
+
+**User info fallback:** If `user:read` OAuth scope is not configured, backend decodes JWT access token payload for user ID and name.
 
 ## Key Files
 
@@ -102,26 +110,49 @@ Backend: Exchanges code for tokens, stores encrypted in Postgres, creates sessio
 - `config.js` — Environment variable validation
 - `routes/auth.js` — OAuth routes (authorize, callback, me)
 - `routes/meetings.js` — Meeting CRUD and transcript endpoints
-- `routes/ai.js` — AI chat and suggestions (OpenRouter)
+- `routes/ai.js` — AI chat, suggestions, and summary (OpenRouter)
+- `routes/home.js` — Home dashboard highlights and reminders (`optionalAuth`)
 - `routes/rtms.js` — RTMS webhook handlers
 - `routes/search.js` — Full-text search
 - `routes/highlights.js` — Meeting highlights/bookmarks
-- `services/auth.js` — Token management, PKCE
+- `services/auth.js` — Token management, PKCE, AES-128-CBC encryption
 - `services/openrouter.js` — LLM API client
 - `services/websocket.js` — WebSocket broadcast server
-- `middleware/auth.js` — Session authentication middleware
+- `middleware/auth.js` — Session authentication middleware (`requireAuth`, `optionalAuth`)
 
 ### Frontend (`frontend/src/`)
-- `App.js` — Main component, Zoom SDK initialization
-- `index.css` — CSS design tokens (`:root` custom properties) and shared Base UI styles
-- `components/ZoomApp.js` — OAuth flow, meeting context, main app shell
-- `components/LiveTranscript.js` — Real-time transcript display
-- `components/AIPanel.js` — AI summary/actions/chat tabs
-- `components/MeetingSuggestions.js` — Duration picker, progress, AI suggestions
-- `components/MeetingHistory.js` — Past meetings list
-- `components/HighlightsPanel.js` — Meeting bookmarks
-- `components/RTMSControls.js` — Start/stop RTMS controls
-- `components/TestPage.js` — Developer test page
+- `App.js` — HashRouter, route definitions, provider hierarchy (Auth → ZoomSdk → Meeting → Theme → Toast)
+- `index.css` — Design tokens, typography (Source Serif 4 + Inter), light/dark theme variables
+- `views/` — 9 view components:
+  - `AuthView.js` — Login screen with "Connect with Zoom" CTA
+  - `HomeView.js` — Dashboard with highlights, reminders, meeting link
+  - `MeetingsListView.js` — Paginated meeting cards with live badge
+  - `MeetingDetailView.js` — 4-tab view (Summary, Transcript, Participants, Highlights)
+  - `InMeetingView.js` — 2-tab live view (Transcript, Arlo Assist) with pre-transcript states
+  - `SettingsView.js` — Placeholder settings page
+  - `GuestNoMeetingView.js` — Unauthenticated, no meeting
+  - `GuestInMeetingView.js` — Unauthenticated, in meeting with summary
+  - `NotFoundView.js` — 404 page
+- `contexts/` — 5 context providers:
+  - `AuthContext.js` — Auth state, session restoration, login/logout
+  - `ZoomSdkContext.js` — Zoom SDK initialization and meeting context
+  - `MeetingContext.js` — Active meeting state, WebSocket connection
+  - `ThemeContext.js` — Light/dark theme with OS detection and localStorage persistence
+  - `ToastContext.js` — Toast notification system
+- `hooks/useZoomAuth.js` — In-client OAuth PKCE flow hook
+- `components/` — Shared components:
+  - `AppShell.js` — Persistent header (back, logo, search, theme toggle, settings) + `<Outlet />`
+  - `ProtectedRoute.js` — Auth guard wrapper
+  - `ErrorBoundary.js` — React error boundary
+  - `LiveMeetingBanner.js` — "Return to live transcript" sticky banner
+  - `MeetingCard.js` — Reusable meeting card with live badge
+  - `OwlIcon.js` — Custom SVG branding icon
+  - `AIPanel.js` — AI summary/actions/chat tabs
+  - `LiveTranscript.js` — Real-time transcript display with follow-live
+  - `HighlightsPanel.js` — Meeting highlights/bookmarks
+  - `TestPage.js` — Developer test page
+- `components/ui/` — UI primitives:
+  - `Button.js`, `Card.js`, `Badge.js`, `Input.js`, `Textarea.js`, `LoadingSpinner.js`
 
 ### RTMS (`rtms/src/`)
 - `index.js` — RTMS client using @zoom/rtms v1.0 class-based API
@@ -151,13 +182,17 @@ import { Tabs } from '@base-ui/react/tabs';
 
 ### Base UI Components in Use
 
-Tabs (AIPanel, MeetingHistory), Collapsible (MeetingHistory), Progress (MeetingSuggestions), Toggle/ToggleGroup (MeetingSuggestions), ScrollArea (LiveTranscript), Tooltip (multiple), AlertDialog (TestPage), Field (HighlightsPanel).
+Tabs (AIPanel, MeetingDetailView, InMeetingView), ScrollArea (LiveTranscript, MeetingDetailView, InMeetingView), Tooltip (HighlightsPanel, TestPage), AlertDialog (TestPage), Field (HighlightsPanel).
 
 ### Styling Conventions
 
 - CSS data attributes for state: `[data-active]`, `[data-pressed]`, `[data-panel-open]`
 - Design tokens in `frontend/src/index.css` under `:root` — use `var(--color-*)`, `var(--radius-*)` etc.
-- ToggleGroup uses array values even in single mode: `value={['60']}`, `onValueChange` receives array
+- Dark mode: `.dark` class on `<html>`, toggled via ThemeContext, stored in `localStorage('arlo-theme')`
+- OS dark mode detection via `prefers-color-scheme` media query (default when no saved preference)
+- Fonts: Source Serif 4 (serif headings/body) + Inter (UI chrome) — self-hosted WOFF2 in `frontend/public/fonts/`
+- Icons: `lucide-react` throughout the app
+- Max width: 900px on `#root` with `border-x` for contained layout
 - Separator component not available (CRA subpath issue) — use plain `<hr>` instead
 
 ## REST API Endpoints
@@ -177,6 +212,14 @@ Tabs (AIPanel, MeetingHistory), Collapsible (MeetingHistory), Progress (MeetingS
 - `GET /api/search` — Full-text search (params: q, meeting_id, from, to)
 - `POST /api/ai/chat` — Chat with transcripts (SSE stream)
 - `POST /api/ai/suggest` — In-meeting AI suggestions
+
+### Home Dashboard
+- `GET /api/home/highlights` — This week's meeting highlights (uses `optionalAuth`)
+- `GET /api/home/reminders` — Yesterday's reminders (uses `optionalAuth`)
+
+### AI Summary & Export
+- `POST /api/ai/summary` — Generate/cache meeting summary (cached in `Meeting.summary`)
+- `GET /api/meetings/:id/export/markdown` — Export meeting as Markdown
 
 ### Highlights
 - Routes in `backend/src/routes/highlights.js`
@@ -240,7 +283,7 @@ DEFAULT_MODEL=google/gemini-2.0-flash-thinking-exp:free
 
 ## Security
 
-- Access tokens stored **encrypted** (AES-256) in Postgres, auto-refresh before expiry
+- Access tokens stored **encrypted** (AES-128-CBC, 16-byte key from `REDIS_ENCRYPTION_KEY`) in Postgres, auto-refresh before expiry
 - httpOnly session cookies, never expose tokens to frontend
 - All API calls from frontend use `fetch` with `credentials: 'include'`
 - HTTP headers required by Zoom Apps: `Strict-Transport-Security`, `X-Content-Type-Options`, `Content-Security-Policy`, `Referrer-Policy`
@@ -253,18 +296,23 @@ arlo-meeting-assistant/
 │   ├── src/
 │   │   ├── server.js
 │   │   ├── config.js
-│   │   ├── routes/    # auth, meetings, ai, rtms, search, highlights
+│   │   ├── routes/    # auth, meetings, ai, home, rtms, search, highlights
 │   │   ├── services/  # auth, openrouter, websocket
 │   │   └── middleware/ # auth
 │   └── prisma/
 │       └── schema.prisma
 ├── frontend/          # React Zoom App (npm workspace, CRA)
 │   ├── public/
-│   │   └── index.html # Loads Zoom Apps SDK script
+│   │   ├── index.html # Loads Zoom Apps SDK script
+│   │   └── fonts/     # Self-hosted Source Serif 4 + Inter WOFF2
 │   └── src/
-│       ├── App.js
-│       ├── index.css  # Design tokens
-│       └── components/ # 8 components (ZoomApp, LiveTranscript, AIPanel, etc.)
+│       ├── App.js         # HashRouter, routes, provider hierarchy
+│       ├── index.css      # Design tokens, typography, themes
+│       ├── views/         # 9 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, Settings, Guest×2, NotFound)
+│       ├── contexts/      # 5 contexts (Auth, ZoomSdk, Meeting, Theme, Toast)
+│       ├── hooks/         # useZoomAuth (OAuth PKCE)
+│       ├── components/    # AppShell, ProtectedRoute, ErrorBoundary, LiveMeetingBanner, MeetingCard, OwlIcon, AIPanel, LiveTranscript, HighlightsPanel, TestPage
+│       └── components/ui/ # Button, Card, Badge, Input, Textarea, LoadingSpinner
 ├── rtms/              # RTMS transcript ingestion (npm workspace)
 │   └── src/index.js
 ├── docs/              # Project documentation
@@ -287,6 +335,6 @@ arlo-meeting-assistant/
 
 ## Known Issues
 
-- Pre-existing lint warnings in `ZoomApp.js` (missing deps in useEffect, unused var) — not to be fixed unless asked
+- Pre-existing lint warning in `HighlightsPanel.js` (missing dep in useEffect) — not to be fixed unless asked
 - No automated tests exist yet (manual testing only)
 - Frontend uses CRA (react-scripts), NOT Next.js

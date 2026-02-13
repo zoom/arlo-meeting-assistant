@@ -95,7 +95,18 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 - No header, no navigation. Standalone landing page.
 
 **Implementation notes:**
-- Auth flow uses Zoom OAuth. Architect the auth layer so it can be extended to other OAuth providers (this is an OSS app meant to be forked).
+- Auth flow uses **Zoom in-client OAuth with PKCE**, implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`). This is the single source of truth for the auth flow.
+- **PKCE flow sequence:**
+  1. Frontend calls `GET /api/auth/authorize` to get a `codeChallenge` and `state` from the backend.
+  2. Frontend registers an `onAuthorized` event listener on the Zoom SDK *before* calling `zoomSdk.authorize()` — this ordering is critical to avoid a race condition where the SDK fires the event before the listener is registered.
+  3. `zoomSdk.authorize({ codeChallenge, state })` hands off to Zoom's native OAuth UI.
+  4. Zoom fires `onAuthorized` with `{ code }`. **Note:** The SDK does *not* return `state` in this event — the hook uses the `state` captured in the closure from step 1.
+  5. Frontend calls `POST /api/auth/callback` with `{ code, state }` (with `credentials: 'include'`).
+  6. Backend exchanges the code for tokens, creates/updates the user, and returns a session cookie.
+  7. Frontend calls `login(user, wsToken)` and navigates to `/home`.
+- **Session restoration:** On app load (or Zoom WebView reload), `AuthContext` calls `GET /api/auth/me` to restore the session from the httpOnly cookie. A loading spinner displays during this check to prevent an auth-screen flash.
+- **User info fallback:** If the `user:read` OAuth scope is not configured, the backend falls back to decoding the JWT access token payload to extract user ID and name.
+- **Token encryption:** Access tokens are stored AES-128-CBC encrypted in Postgres (the `REDIS_ENCRYPTION_KEY` env var provides a 16-byte hex key).
 - On successful OAuth callback, redirect to `/home`.
 
 ---

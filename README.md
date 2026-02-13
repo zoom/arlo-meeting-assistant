@@ -47,6 +47,10 @@ Arlo is designed to help developers quickly prototype and deploy their own meeti
 - 💬 **Chat with Transcripts** - RAG-based Q&A over your meetings
 - 🎯 **Meeting Highlights** - Create bookmarks with timestamps
 - 📤 **Export VTT** - Download WebVTT files for video players
+- 🏠 **Home Dashboard** — AI highlights and reminders from recent meetings
+- 🌙 **Dark Mode** — OS detection with manual toggle, persisted preference
+- 📄 **Export Markdown** — Download meeting summary + transcript as MD
+- 🏗️ **Multi-View Architecture** — 9 views with HashRouter, shared AppShell
 - 🔐 **Secure** - Zoom OAuth, encrypted tokens, RLS data isolation
 
 ---
@@ -294,7 +298,8 @@ Comprehensive guides available in [`/docs/`](./docs/):
 ```
 
 **Tech Stack:**
-- Frontend: React 18, Zoom Apps SDK 0.16
+- Frontend: React 18, Zoom Apps SDK 0.16, react-router-dom 6 (HashRouter), @base-ui/react, lucide-react
+- Fonts: Source Serif 4 + Inter (self-hosted WOFF2)
 - Backend: Node.js 20, Express, Prisma
 - Database: PostgreSQL 15
 - AI: OpenRouter (free models, no API key required)
@@ -319,10 +324,16 @@ arlo-meeting-assistant/
 │
 ├── frontend/         # React Zoom App
 │   ├── public/
-│   │   └── index.html      # Loads Zoom SDK
+│   │   ├── index.html      # Loads Zoom SDK
+│   │   └── fonts/          # Self-hosted Source Serif 4 + Inter
 │   └── src/
-│       ├── App.js          # SDK initialization
-│       └── components/     # React components
+│       ├── App.js           # HashRouter, routes, provider hierarchy
+│       ├── index.css        # Design tokens, typography, themes
+│       ├── views/           # 9 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, Settings, Guest×2, NotFound)
+│       ├── contexts/        # 5 contexts (Auth, ZoomSdk, Meeting, Theme, Toast)
+│       ├── hooks/           # useZoomAuth (OAuth PKCE)
+│       ├── components/      # AppShell, LiveTranscript, AIPanel, MeetingCard, etc.
+│       └── components/ui/   # Button, Card, Badge, Input, Textarea, LoadingSpinner
 │
 ├── rtms/             # RTMS transcript ingestion
 │   └── src/
