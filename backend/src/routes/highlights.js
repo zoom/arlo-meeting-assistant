@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { requireAuth, devAuthBypass } = require('../middleware/auth');
+const { requireAuth, optionalAuth, devAuthBypass } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -8,13 +8,12 @@ const prisma = new PrismaClient();
 // Apply auth middleware to all routes
 // IMPORTANT: devAuthBypass must run BEFORE requireAuth so it can set req.user in dev mode
 router.use(devAuthBypass); // Allow dev mode query param bypass
-router.use(requireAuth);
 
 /**
  * GET /api/highlights
  * Get highlights for a meeting
  */
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   try {
     const { meetingId } = req.query;
 
@@ -22,13 +21,20 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ error: 'meetingId is required' });
     }
 
-    // Verify meeting belongs to authenticated user
-    const meeting = await prisma.meeting.findFirst({
-      where: {
-        id: meetingId,
-        ownerId: req.user.id,
-      },
-    });
+    // Build where clause — filter by owner if authenticated, otherwise allow system user's meetings
+    const meetingWhere = { id: meetingId };
+    if (req.user) {
+      meetingWhere.ownerId = req.user.id;
+    }
+
+    let meeting = await prisma.meeting.findFirst({ where: meetingWhere });
+
+    // If authenticated user doesn't own the meeting, check if it's a system user meeting
+    if (!meeting && req.user) {
+      meeting = await prisma.meeting.findFirst({
+        where: { id: meetingId },
+      });
+    }
 
     if (!meeting) {
       return res.status(404).json({ error: 'Meeting not found' });
@@ -50,7 +56,7 @@ router.get('/', async (req, res) => {
  * POST /api/highlights
  * Create a new highlight
  */
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   try {
     const { meetingId, title, notes, tStartMs, tEndMs, tags } = req.body;
 
@@ -58,12 +64,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'meetingId and title are required' });
     }
 
-    // Verify meeting belongs to authenticated user
+    // Verify meeting exists (allow system-owned meetings)
     const meeting = await prisma.meeting.findFirst({
-      where: {
-        id: meetingId,
-        ownerId: req.user.id,
-      },
+      where: { id: meetingId },
     });
 
     if (!meeting) {
@@ -93,7 +96,7 @@ router.post('/', async (req, res) => {
  * PATCH /api/highlights/:id
  * Update a highlight
  */
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, notes, tags } = req.body;
@@ -134,7 +137,7 @@ router.patch('/:id', async (req, res) => {
  * DELETE /api/highlights/:id
  * Delete a highlight
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
 

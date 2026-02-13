@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useZoomSdk } from './ZoomSdkContext';
 
 const MeetingContext = createContext();
@@ -11,6 +11,7 @@ export function MeetingProvider({ children }) {
 
   const meetingStartTimeRef = useRef(null);
   const autoStartAttemptedRef = useRef(false);
+  const titleSentRef = useRef(false);
 
   const meetingId = meetingContext?.meetingUUID;
 
@@ -138,6 +139,30 @@ export function MeetingProvider({ children }) {
       setRtmsLoading(false);
     }
   }, [rtmsLoading, zoomSdk]);
+
+  // Send Zoom meeting topic to backend to replace generic "Meeting M/D/YYYY" title
+  // Wait for rtmsActive so the meeting record exists in the DB before patching
+  useEffect(() => {
+    const topic = meetingContext?.meetingTopic;
+    if (!rtmsActive || !meetingId || !topic || titleSentRef.current) return;
+    titleSentRef.current = true;
+
+    let attempts = 0;
+    const sendTitle = () => {
+      fetch(`/api/meetings/by-zoom-id/${encodeURIComponent(meetingId)}/topic`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ title: topic }),
+      }).then(res => {
+        // Meeting record may not exist yet — retry after delay (max 3 attempts)
+        if (res.status === 404 && ++attempts < 3) {
+          setTimeout(sendTitle, 3000);
+        }
+      }).catch(() => {});
+    };
+    sendTitle();
+  }, [rtmsActive, meetingId, meetingContext?.meetingTopic]);
 
   return (
     <MeetingContext.Provider value={{

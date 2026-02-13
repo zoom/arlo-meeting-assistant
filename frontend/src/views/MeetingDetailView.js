@@ -32,6 +32,7 @@ export default function MeetingDetailView() {
   const [highlights, setHighlights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryFailed, setSummaryFailed] = useState(false);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState(null);
   const [answerLoading, setAnswerLoading] = useState(false);
@@ -73,7 +74,7 @@ export default function MeetingDetailView() {
 
   // Auto-generate summary when summary tab is shown
   useEffect(() => {
-    if (activeTab !== 'summary' || summary || summaryLoading || !meeting) return;
+    if (activeTab !== 'summary' || summary || summaryLoading || summaryFailed || !meeting) return;
 
     async function fetchSummary() {
       setSummaryLoading(true);
@@ -87,6 +88,8 @@ export default function MeetingDetailView() {
         if (res.ok) {
           const data = await res.json();
           setSummary(data.summary);
+        } else {
+          setSummaryFailed(true);
         }
 
         const aiRes = await fetch('/api/ai/action-items', {
@@ -100,14 +103,14 @@ export default function MeetingDetailView() {
           setActionItems(data.actionItems || []);
         }
       } catch {
-        // AI generation failed
+        setSummaryFailed(true);
       } finally {
         setSummaryLoading(false);
       }
     }
 
     fetchSummary();
-  }, [activeTab, summary, summaryLoading, meeting, id]);
+  }, [activeTab, summary, summaryLoading, summaryFailed, meeting, id]);
 
   const askQuestion = async () => {
     if (!question.trim()) return;

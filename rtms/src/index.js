@@ -210,8 +210,8 @@ async function handleTranscript(meetingId, transcript) {
     speakerId: userId ? String(userId) : 'unknown',
     speakerLabel: userName || (userId ? `Speaker ${userId}` : 'Speaker'),
     text: text || '',
-    tStartMs: timestamp ? Math.floor(timestamp / 1000) : now, // Zoom sends microseconds, convert to ms
-    tEndMs: timestamp ? Math.floor(timestamp / 1000) : now,   // Same as start (updated on next segment)
+    tStartMs: now, // Use wall-clock time (RTMS SDK timestamp is relative, not epoch)
+    tEndMs: now,
     seqNo: now,
   };
 

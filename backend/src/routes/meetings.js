@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { requireAuth, devAuthBypass } = require('../middleware/auth');
+const { requireAuth, optionalAuth, devAuthBypass } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -14,25 +14,23 @@ router.use(devAuthBypass); // Allow dev mode query param bypass
  * GET /api/meetings
  * List meetings (all meetings if no auth, user's meetings if authenticated)
  */
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   try {
     const { from, to, limit = 50, cursor } = req.query;
 
-    // Build where clause
+    // Build where clause — show user's meetings + system user's meetings
     const where = {};
+    const systemUser = await prisma.user.findFirst({
+      where: { zoomUserId: 'system' }
+    });
 
-    // If user is authenticated, filter by their meetings
-    // Otherwise show system user's meetings (for anonymous in-meeting access)
     if (req.user) {
-      where.ownerId = req.user.id;
-    } else {
-      // Show system user's meetings for anonymous users
-      const systemUser = await prisma.user.findFirst({
-        where: { email: 'system@arlo.local' }
-      });
-      if (systemUser) {
-        where.ownerId = systemUser.id;
-      }
+      // Show both the user's own meetings and system-owned meetings
+      const ownerIds = [req.user.id];
+      if (systemUser) ownerIds.push(systemUser.id);
+      where.ownerId = { in: ownerIds };
+    } else if (systemUser) {
+      where.ownerId = systemUser.id;
     }
 
     if (from) where.startTime = { ...where.startTime, gte: new Date(from) };
@@ -70,24 +68,57 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * PATCH /api/meetings/by-zoom-id/:zoomMeetingId/topic
+ * Update meeting title from Zoom SDK meeting topic.
+ * Only overwrites generic "Meeting M/D/YYYY" titles.
+ */
+router.patch('/by-zoom-id/:zoomMeetingId/topic', optionalAuth, async (req, res) => {
+  try {
+    const { zoomMeetingId } = req.params;
+    const { title } = req.body;
+
+    if (!title || title.trim().length === 0) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const meeting = await prisma.meeting.findFirst({
+      where: { zoomMeetingId },
+      orderBy: { startTime: 'desc' },
+    });
+
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+
+    // Only update if current title matches the generic date pattern
+    const genericPattern = /^Meeting \d{1,2}\/\d{1,2}\/\d{2,4}$/;
+    if (!genericPattern.test(meeting.title)) {
+      return res.json({ meeting, updated: false });
+    }
+
+    const updated = await prisma.meeting.update({
+      where: { id: meeting.id },
+      data: { title: title.trim() },
+    });
+
+    console.log(`Updated meeting title: "${meeting.title}" → "${updated.title}"`);
+    res.json({ meeting: updated, updated: true });
+  } catch (error) {
+    console.error('Update meeting topic error:', error);
+    res.status(500).json({ error: 'Failed to update meeting topic' });
+  }
+});
+
+/**
  * GET /api/meetings/:id
  * Get meeting details
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Build where clause
-    const where = { id };
-
-    // If user is authenticated, filter by their meetings
-    if (req.user) {
-      where.ownerId = req.user.id;
-    }
-    // Otherwise allow access to system user's meetings
-
     const meeting = await prisma.meeting.findFirst({
-      where,
+      where: { id },
       include: {
         speakers: true,
         highlights: true,
@@ -114,23 +145,14 @@ router.get('/:id', async (req, res) => {
  * GET /api/meetings/:id/transcript
  * Get meeting transcript segments
  */
-router.get('/:id/transcript', async (req, res) => {
+router.get('/:id/transcript', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { from_ms, to_ms, limit = 100, after_seq } = req.query;
 
-    // Build where clause
-    const meetingWhere = { id };
-
-    // If user is authenticated, filter by their meetings
-    if (req.user) {
-      meetingWhere.ownerId = req.user.id;
-    }
-    // Otherwise allow access to system user's meetings
-
     // Verify meeting exists
     const meeting = await prisma.meeting.findFirst({
-      where: meetingWhere,
+      where: { id },
     });
 
     if (!meeting) {
