@@ -6,6 +6,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import { useZoomSdk } from '../contexts/ZoomSdkContext';
 import './MeetingDetailView.css';
 
 function formatTimestamp(ms) {
@@ -25,6 +26,7 @@ function formatDuration(ms) {
 
 export default function MeetingDetailView() {
   const { id } = useParams();
+  const { zoomSdk, isTestMode } = useZoomSdk();
   const [meeting, setMeeting] = useState(null);
   const [segments, setSegments] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -134,12 +136,21 @@ export default function MeetingDetailView() {
     }
   };
 
+  const openExportUrl = (path) => {
+    const absoluteUrl = `${window.location.origin}${path}`;
+    if (!isTestMode && zoomSdk) {
+      zoomSdk.openUrl({ url: absoluteUrl });
+    } else {
+      window.open(absoluteUrl, '_blank');
+    }
+  };
+
   const exportVTT = () => {
-    window.open(`/api/meetings/${id}/vtt`, '_blank');
+    openExportUrl(`/api/meetings/${id}/vtt`);
   };
 
   const exportMD = () => {
-    window.open(`/api/meetings/${id}/export/markdown`, '_blank');
+    openExportUrl(`/api/meetings/${id}/export/markdown`);
   };
 
   if (loading) {
