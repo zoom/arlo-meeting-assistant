@@ -58,10 +58,51 @@ See the Documentation TODOs section below for specific items.
 
 A visual timeline showing when each participant joined and left the meeting. Requires a new database model for join/leave events, handling `meeting.participant_joined` and `meeting.participant_left` webhooks, and a timeline UI component (as a new tab in MeetingDetailView).
 
-### Auto-open app in meetings
-`intermediate` · Backend Zoom REST API integration, `frontend/src/views/SettingsView.js`
+### Upcoming meetings & auto-open
+`intermediate` · Backend Zoom REST API integration, new frontend view, Settings enhancement
 
-Use the Zoom REST API to configure Arlo to auto-open when a user's upcoming meetings start. This requires reading the user's meeting list and setting per-meeting app configuration. Include a toggle in Settings so users can opt in.
+Display a user's upcoming Zoom meetings inside Arlo and let them toggle auto-open so the app launches automatically when a meeting starts. This is a two-part feature: fetching the meeting list from Zoom, and calling the Zoom "open apps" API to register Arlo for auto-launch.
+
+#### Backend — New `services/zoomApi.js` helper
+
+A reusable helper for authenticated Zoom REST API calls. Retrieves the user's token from the DB, decrypts it, and makes the request. On a 401 response it auto-refreshes the token and retries once. This service is used by the new routes below and any future Zoom API integrations.
+
+#### Backend — New `routes/zoom-meetings.js`
+
+- **`GET /api/zoom-meetings`** — Proxies to `GET https://api.zoom.us/v2/users/me/meetings?type=upcoming`. Returns a trimmed list of upcoming meetings: `id`, `topic`, `start_time`, `duration`, `join_url`. Requires the `meeting:read` OAuth scope (likely already present from RTMS setup).
+
+- **`POST /api/zoom-meetings/:meetingId/auto-open`** — Proxies to `POST https://api.zoom.us/v2/meetings/{meetingId}/open_apps`. Registers Arlo to auto-open when that meeting starts. Zoom enforces a maximum of 3 apps per meeting. Requires the `meeting:write` OAuth scope (new — must be added in Marketplace config).
+
+- **`DELETE /api/zoom-meetings/:meetingId/auto-open`** — Removes the auto-open registration for Arlo on a specific meeting (if the Zoom API supports removal; otherwise document the limitation).
+
+Mount as `app.use('/api/zoom-meetings', requireAuth, require('./routes/zoom-meetings'))` in `server.js`.
+
+#### Frontend — New `UpcomingMeetingsView.js` (or section in HomeView)
+
+- Fetches `GET /api/zoom-meetings` on mount and displays a list of upcoming scheduled meetings.
+- Each meeting card shows: topic, date/time, duration.
+- A toggle or button per meeting to enable/disable auto-open for Arlo.
+- A badge or visual indicator when auto-open is active for a meeting.
+- Add a route (e.g. `/#/upcoming`) or embed as a collapsible section in `HomeView`.
+
+#### Frontend — SettingsView enhancement
+
+- The existing "Auto-open in meetings" toggle becomes functional (currently decorative).
+- When enabled, links to the upcoming meetings list for per-meeting control.
+- Consider a global "auto-open for all meetings" option vs. per-meeting granularity.
+
+#### OAuth scopes
+
+| Scope | Purpose | Status |
+|-------|---------|--------|
+| `meeting:read` | List upcoming meetings | Likely already configured |
+| `meeting:write` | Register auto-open apps | **New — add in Marketplace** |
+
+#### Prerequisites / Zoom configuration
+
+- The **"Zoom Apps Quick Launch Button"** must be enabled in the Zoom web portal settings (under Settings → In Meeting (Advanced)).
+- The Marketplace app must have `meeting:read` and `meeting:write` scopes added and approved.
+- Document these requirements in the README setup section.
 
 ### Direct AI provider support
 `intermediate` · `backend/src/services/openrouter.js`, `frontend/src/views/SettingsView.js`
