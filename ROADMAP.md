@@ -12,6 +12,8 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 - [x] **Summary storage in database** — AI-generated summaries are cached in a `Meeting.summary` JSON field so they don't need to be regenerated on every view (`POST /api/ai/summary`).
 - [x] **Transcript API endpoint** — Paginated transcript retrieval via `GET /api/meetings/:id/transcript` with `from_ms`, `to_ms`, `limit`, and `after_seq` parameters.
 - [x] **Tab active state styling** — Tabs now have a visible selected state using `[data-selected]` CSS attribute selectors in `frontend/src/index.css`.
+- [x] **Delete meetings from UI** — Delete button with confirmation dialog on both `MeetingDetailView` and `MeetingsListView`, using the existing `DELETE /api/meetings/:id` endpoint.
+- [x] **Rename meetings from UI** — Inline title editing in `MeetingDetailView` header, using the existing `PATCH /api/meetings/:id` endpoint.
 
 ---
 
@@ -26,16 +28,6 @@ Zoom supports automatic RTMS start at three levels: account-wide, group, and per
 `intermediate` · `frontend/src/components/AppShell.js`, `backend/src/routes/search.js`
 
 Search currently queries transcript text via Postgres full-text search. This item expands search to include meeting titles, speaker names, and AI-generated summaries. Consider adding a dedicated search results view instead of only showing results in the header dropdown.
-
-### Delete meetings from UI
-`good-first-issue` · `frontend/src/views/MeetingDetailView.js`, `frontend/src/views/MeetingsListView.js`
-
-The backend already supports `DELETE /api/meetings/:id`. This item adds a delete button (with a confirmation dialog) to the meeting detail view and optionally to meeting cards in the list view.
-
-### Rename meetings from UI
-`good-first-issue` · `frontend/src/views/MeetingDetailView.js`
-
-The backend already supports `PATCH /api/meetings/:id`. This item adds an inline-edit or modal to change a meeting's title from the meeting detail header.
 
 ### Send messages to Zoom meeting chat
 `intermediate` · `frontend/src/views/InMeetingView.js`, Zoom Apps SDK
