@@ -14,6 +14,7 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 - [x] **Tab active state styling** — Tabs now have a visible selected state using `[data-selected]` CSS attribute selectors in `frontend/src/index.css`.
 - [x] **Delete meetings from UI** — Delete button with confirmation dialog on both `MeetingDetailView` and `MeetingsListView`, using the existing `DELETE /api/meetings/:id` endpoint.
 - [x] **Rename meetings from UI** — Inline title editing in `MeetingDetailView` header, using the existing `PATCH /api/meetings/:id` endpoint.
+- [x] **Pause/resume RTMS** — Transport controls now use real `pauseRTMS`/`resumeRTMS` Zoom SDK calls instead of stop/start workaround. Paused state lifted into `MeetingContext` (`rtmsPaused`).
 
 ---
 
@@ -23,6 +24,11 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 `advanced` · Backend webhooks, frontend state management
 
 Zoom supports automatic RTMS start at three levels: account-wide, group, and per-user. The app currently has a basic auto-start timer in `InMeetingView.js` (line 55), but it doesn't handle the full matrix of scenarios. This item covers: host-initiated auto-start via webhook, participant-triggered RTMS with optional host approval, and suppressing auto-restart when the user has explicitly stopped transcription. See also the related known issue below.
+
+### AI-generated meeting title
+`good-first-issue` · `backend/src/services/openrouter.js`, `backend/src/routes/ai.js`, `frontend/src/views/MeetingDetailView.js`
+
+A sparkle icon next to the meeting title in `MeetingDetailView` calls `POST /api/ai/generate-title` to produce a concise, descriptive title from the transcript or cached summary. The generated title pre-fills the inline editor so the user can review and tweak before saving.
 
 ### Improve search experience
 `intermediate` · `frontend/src/components/AppShell.js`, `backend/src/routes/search.js`
@@ -48,11 +54,6 @@ Create a `manifest.json` file for easier Zoom Marketplace installation. This fil
 `advanced` · `backend/src/routes/rtms.js`, `backend/src/middleware/auth.js`
 
 When RTMS auto-starts via webhook before the user opens the app, the backend creates the meeting under a "system" user. When the real user later opens Arlo in that meeting, the app needs to detect the orphaned meeting and reassign ownership so the user sees their transcript.
-
-### Implement pause/resume RTMS
-`intermediate` · `frontend/src/views/InMeetingView.js`, `frontend/src/contexts/MeetingContext.js`
-
-The current pause button uses `stopRTMS`/`startRTMS` as a workaround, which ends the RTMS session entirely. Zoom's SDK provides `pauseRTMS` and `resumeRTMS` methods that preserve the session while temporarily halting the transcript stream. Switching to these gives true pause behavior.
 
 ### README improvements
 `good-first-issue`

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Tabs, ScrollArea } from '@base-ui/react';
-import { Download, Trash2, Pencil, Check, X, Loader2 } from 'lucide-react';
+import { Download, Trash2, Pencil, Check, X, Loader2, Sparkles } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -46,6 +46,7 @@ export default function MeetingDetailView() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
   const transcriptRef = useRef(null);
 
   // Fetch meeting data
@@ -207,6 +208,28 @@ export default function MeetingDetailView() {
     setEditedTitle(meeting.title);
   };
 
+  const handleGenerateTitle = async (e) => {
+    e.stopPropagation();
+    setIsGeneratingTitle(true);
+    try {
+      const res = await fetch('/api/ai/generate-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ meetingId: id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEditedTitle(data.title);
+        setIsEditingTitle(true);
+      }
+    } catch {
+      // Generation failed
+    } finally {
+      setIsGeneratingTitle(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="detail-loading">
@@ -270,7 +293,18 @@ export default function MeetingDetailView() {
         ) : (
           <div className="title-display" onClick={handleEditTitle}>
             <h1 className="text-serif text-2xl">{meeting.title}</h1>
-            <Pencil size={16} className="title-pencil text-muted" />
+            <Pencil size={16} className="title-action text-muted" />
+            <button
+              className="title-action-btn"
+              onClick={handleGenerateTitle}
+              disabled={isGeneratingTitle}
+              title="Generate title with AI"
+            >
+              {isGeneratingTitle
+                ? <Loader2 size={16} className="spin text-muted" />
+                : <Sparkles size={16} className="title-action text-muted" />
+              }
+            </button>
           </div>
         )}
         <p className="text-sans text-sm text-muted">

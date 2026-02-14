@@ -4,6 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const config = require('../config');
 const {
   generateSummary,
+  generateTitle,
   extractActionItems,
   chatWithTranscript,
 } = require('../services/openrouter');
@@ -259,6 +260,53 @@ router.post('/chat', async (req, res) => {
   } catch (error) {
     console.error('❌ Chat error:', error.message);
     res.status(500).json({ error: 'Failed to process question' });
+  }
+});
+
+/**
+ * POST /api/ai/generate-title
+ * Generate a descriptive meeting title from transcript or summary
+ */
+router.post('/generate-title', async (req, res) => {
+  const { meetingId } = req.body;
+
+  if (!config.aiEnabled) {
+    return res.status(503).json({ error: 'AI features are disabled' });
+  }
+
+  if (!meetingId) {
+    return res.status(400).json({ error: 'meetingId is required' });
+  }
+
+  try {
+    const meeting = await findMeeting(meetingId);
+
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+
+    // Prefer summary (shorter/cheaper) over full transcript
+    let content;
+    if (meeting.summary?.overview) {
+      content = meeting.summary.overview;
+      if (meeting.summary.keyPoints?.length) {
+        content += '\n' + meeting.summary.keyPoints.join('\n');
+      }
+    } else {
+      content = await getTranscriptText(meeting.id);
+      if (!content) {
+        return res.status(400).json({ error: 'No transcript available for this meeting' });
+      }
+    }
+
+    console.log(`🤖 Generating title for meeting: ${meeting.title}`);
+
+    const title = await generateTitle(content, meeting.title);
+
+    res.json({ title });
+  } catch (error) {
+    console.error('❌ Title generation error:', error.message);
+    res.status(500).json({ error: 'Failed to generate title' });
   }
 });
 

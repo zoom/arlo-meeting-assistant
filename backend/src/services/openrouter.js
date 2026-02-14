@@ -216,9 +216,43 @@ Only output valid JSON array.`;
   }
 }
 
+/**
+ * Generate a concise meeting title from transcript or summary content
+ * @param {string} content - Transcript text or summary overview
+ * @param {string} currentTitle - Current meeting title for context
+ * @returns {Promise<string>} Generated title (under 60 chars)
+ */
+async function generateTitle(content, currentTitle = 'Meeting') {
+  const systemPrompt = `You are an expert at creating concise, descriptive meeting titles.
+Given the meeting content, generate a short, meaningful title that captures the main topic or purpose.
+Rules:
+- Maximum 60 characters
+- No quotes around the title
+- Use title case
+- Be specific — avoid generic titles like "Team Meeting" or "Weekly Sync"
+- Output ONLY the title, nothing else`;
+
+  const prompt = `Current title: "${currentTitle}"
+
+Meeting content:
+${content.substring(0, 3000)}
+
+Generate a better, more descriptive title:`;
+
+  try {
+    const response = await callOpenRouter(prompt, systemPrompt, { maxTokens: 64 });
+    // Clean up: remove quotes, trim whitespace, truncate if needed
+    return response.replace(/^["']|["']$/g, '').trim().substring(0, 60);
+  } catch (error) {
+    console.error('❌ Title generation failed:', error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   callOpenRouter,
   generateSummary,
+  generateTitle,
   extractActionItems,
   chatWithTranscript,
   generateSuggestions,
