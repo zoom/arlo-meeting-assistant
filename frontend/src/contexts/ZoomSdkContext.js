@@ -36,6 +36,7 @@ export function ZoomSdkProvider({ children }) {
             'onMessage',
             'postMessage',
             'showNotification',
+            'sendMessageToChat',
             'openUrl',
           ],
           version: '0.16.0',
