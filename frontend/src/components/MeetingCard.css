@@ -52,3 +52,23 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.meeting-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meeting-card-delete {
+  opacity: 0;
+  color: var(--muted-foreground);
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.meeting-card:hover .meeting-card-delete {
+  opacity: 1;
+}
+
+.meeting-card-delete:hover {
+  color: var(--destructive) !important;
+}

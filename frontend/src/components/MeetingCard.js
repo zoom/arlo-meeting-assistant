@@ -1,4 +1,5 @@
 import React from 'react';
+import { Trash2 } from 'lucide-react';
 import Card from './ui/Card';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
@@ -23,7 +24,7 @@ function formatDuration(ms) {
   return remaining ? `${hours}h ${remaining}m` : `${hours}h`;
 }
 
-export default function MeetingCard({ meeting, onClick }) {
+export default function MeetingCard({ meeting, onClick, onDelete }) {
   const isLive = meeting.status === 'ongoing';
   const speakers = meeting.speakers || [];
   const participantNames = speakers
@@ -56,9 +57,24 @@ export default function MeetingCard({ meeting, onClick }) {
             </p>
           )}
         </div>
-        <Button variant={isLive ? 'accent' : 'outline'} size="sm">
-          {isLive ? 'Join' : 'View'}
-        </Button>
+        <div className="meeting-card-actions">
+          {onDelete && !isLive && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="meeting-card-delete"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(meeting);
+              }}
+            >
+              <Trash2 size={14} />
+            </Button>
+          )}
+          <Button variant={isLive ? 'accent' : 'outline'} size="sm">
+            {isLive ? 'Join' : 'View'}
+          </Button>
+        </div>
       </div>
     </Card>
   );

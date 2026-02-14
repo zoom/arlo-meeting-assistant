@@ -209,7 +209,7 @@ router.get('/:id/transcript', optionalAuth, async (req, res) => {
  * PATCH /api/meetings/:id
  * Update meeting (rename, etc.)
  */
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { title } = req.body;
@@ -398,17 +398,20 @@ router.get('/:id/export/markdown', async (req, res) => {
  * DELETE /api/meetings/:id
  * Delete a meeting
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verify ownership - always filter by authenticated user
-    const where = {
-      id,
-      ownerId: req.user.id,
-    };
+    // Verify ownership - allow deleting user's own meetings and system-owned meetings
+    const systemUser = await prisma.user.findFirst({
+      where: { zoomUserId: 'system' }
+    });
+    const ownerIds = [req.user.id];
+    if (systemUser) ownerIds.push(systemUser.id);
 
-    const meeting = await prisma.meeting.findFirst({ where });
+    const meeting = await prisma.meeting.findFirst({
+      where: { id, ownerId: { in: ownerIds } },
+    });
 
     if (!meeting) {
       return res.status(404).json({ error: 'Meeting not found' });

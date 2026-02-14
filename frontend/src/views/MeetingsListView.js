@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MeetingCard from '../components/MeetingCard';
+import DeleteMeetingDialog from '../components/DeleteMeetingDialog';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import './MeetingsListView.css';
 
@@ -8,6 +9,7 @@ export default function MeetingsListView() {
   const navigate = useNavigate();
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
     async function fetchMeetings() {
@@ -25,6 +27,22 @@ export default function MeetingsListView() {
     }
     fetchMeetings();
   }, []);
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const res = await fetch(`/api/meetings/${deleteTarget.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        setMeetings((prev) => prev.filter((m) => m.id !== deleteTarget.id));
+      }
+    } catch {
+      // Delete failed
+    }
+    setDeleteTarget(null);
+  };
 
   if (loading) {
     return (
@@ -56,10 +74,17 @@ export default function MeetingsListView() {
                   navigate(`/meetings/${meeting.id}`);
                 }
               }}
+              onDelete={(m) => setDeleteTarget(m)}
             />
           ))}
         </div>
       )}
+      <DeleteMeetingDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        meetingTitle={deleteTarget?.title}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }
