@@ -166,16 +166,18 @@ a:hover {
 
 /* Tabs (Base UI) */
 .tabs-list {
-  display: grid;
+  display: flex;
   background: var(--muted);
   border-radius: var(--radius-lg);
   padding: 2px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
-.tabs-list[data-cols="2"] { grid-template-columns: 1fr 1fr; }
-.tabs-list[data-cols="3"] { grid-template-columns: 1fr 1fr 1fr; }
-.tabs-list[data-cols="4"] { grid-template-columns: 1fr 1fr 1fr 1fr; }
-.tabs-list[data-cols="5"] { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
+.tabs-list::-webkit-scrollbar {
+  display: none;
+}
 
 .tab-trigger {
   font-family: var(--font-sans);
@@ -183,6 +185,8 @@ a:hover {
   font-weight: 500;
   padding: 6px 12px;
   border: none;
+  white-space: nowrap;
+  flex: 1 0 auto;
   border-radius: calc(var(--radius-lg) - 2px);
   background: transparent;
   color: var(--muted-foreground);
