@@ -16,14 +16,38 @@
   gap: 32px;
 }
 
-.guest-text {
+.guest-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Feature cards */
+.guest-features {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  text-align: left;
+  width: 100%;
 }
 
-.guest-text p {
-  line-height: 1.6;
+.guest-feature-inner {
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.guest-feature-icon {
+  color: var(--accent);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.guest-feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .guest-btn {

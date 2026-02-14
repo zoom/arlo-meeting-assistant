@@ -58,3 +58,5 @@ docker-compose.override.yml
 *.pem
 *.key
 .vercel
+
+FIGMA

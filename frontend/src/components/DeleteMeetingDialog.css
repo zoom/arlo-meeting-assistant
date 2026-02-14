@@ -1,0 +1,55 @@
+/* Dialog overlay */
+.delete-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Dialog content */
+.delete-dialog-content {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  max-width: 400px;
+  width: calc(100% - 32px);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+}
+
+.delete-dialog-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.delete-dialog-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Destructive button */
+.btn-destructive {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-destructive:hover {
+  opacity: 0.9;
+}

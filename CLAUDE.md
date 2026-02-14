@@ -123,15 +123,16 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
 ### Frontend (`frontend/src/`)
 - `App.js` — HashRouter, route definitions, provider hierarchy (Auth → ZoomSdk → Meeting → Theme → Toast)
 - `index.css` — Design tokens, typography (Source Serif 4 + Inter), light/dark theme variables
-- `views/` — 9 view components:
+- `views/` — 10 view components:
   - `AuthView.js` — Login screen with "Connect with Zoom" CTA
-  - `HomeView.js` — Dashboard with highlights, reminders, meeting link
+  - `HomeView.js` — Dashboard with weekly digest, action items, recurring topics, highlights, reminders
   - `MeetingsListView.js` — Paginated meeting cards with live badge
-  - `MeetingDetailView.js` — 4-tab view (Summary, Transcript, Participants, Highlights)
-  - `InMeetingView.js` — 2-tab live view (Transcript, Arlo Assist) with pre-transcript states
-  - `SettingsView.js` — Placeholder settings page
-  - `GuestNoMeetingView.js` — Unauthenticated, no meeting
-  - `GuestInMeetingView.js` — Unauthenticated, in meeting with summary
+  - `MeetingDetailView.js` — 5-tab view (Summary, Transcript, Participants, Tasks, Timeline) with inline title edit and delete
+  - `InMeetingView.js` — 2-tab live view (Transcript, Arlo Assist) with 3-state transport controls (live/paused/stopped)
+  - `SearchResultsView.js` — Full search page with query highlighting, empty/initial states
+  - `SettingsView.js` — Transcription preferences (toggles) + AI provider/model/API key configuration
+  - `GuestNoMeetingView.js` — Feature cards (Mic, Sparkles, Search) + "Connect with Zoom" CTA
+  - `GuestInMeetingView.js` — Live badge, summary/skeleton, faded transcript preview, CTA card
   - `NotFoundView.js` — 404 page
 - `contexts/` — 5 context providers:
   - `AuthContext.js` — Auth state, session restoration, login/logout
@@ -141,7 +142,7 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
   - `ToastContext.js` — Toast notification system
 - `hooks/useZoomAuth.js` — In-client OAuth PKCE flow hook
 - `components/` — Shared components:
-  - `AppShell.js` — Persistent header (back, logo, search, theme toggle, settings) + `<Outlet />`
+  - `AppShell.js` — Persistent header (back, logo, search, theme toggle, settings) + `<Outlet />`. Enter in search navigates to `/search?q=...`
   - `ProtectedRoute.js` — Auth guard wrapper
   - `ErrorBoundary.js` — React error boundary
   - `LiveMeetingBanner.js` — "Return to live transcript" sticky banner
@@ -150,6 +151,8 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
   - `AIPanel.js` — AI summary/actions/chat tabs
   - `LiveTranscript.js` — Real-time transcript display with follow-live
   - `HighlightsPanel.js` — Meeting highlights/bookmarks
+  - `DeleteMeetingDialog.js` — Confirmation dialog for meeting deletion
+  - `ParticipantTimeline.js` — Swimlane timeline visualization with colored bars per participant
   - `TestPage.js` — Developer test page
 - `components/ui/` — UI primitives:
   - `Button.js`, `Card.js`, `Badge.js`, `Input.js`, `Textarea.js`, `LoadingSpinner.js`
@@ -308,10 +311,10 @@ arlo-meeting-assistant/
 │   └── src/
 │       ├── App.js         # HashRouter, routes, provider hierarchy
 │       ├── index.css      # Design tokens, typography, themes
-│       ├── views/         # 9 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, Settings, Guest×2, NotFound)
+│       ├── views/         # 10 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, SearchResults, Settings, Guest×2, NotFound)
 │       ├── contexts/      # 5 contexts (Auth, ZoomSdk, Meeting, Theme, Toast)
 │       ├── hooks/         # useZoomAuth (OAuth PKCE)
-│       ├── components/    # AppShell, ProtectedRoute, ErrorBoundary, LiveMeetingBanner, MeetingCard, OwlIcon, AIPanel, LiveTranscript, HighlightsPanel, TestPage
+│       ├── components/    # AppShell, ProtectedRoute, ErrorBoundary, LiveMeetingBanner, MeetingCard, OwlIcon, AIPanel, LiveTranscript, HighlightsPanel, DeleteMeetingDialog, ParticipantTimeline, TestPage
 │       └── components/ui/ # Button, Card, Badge, Input, Textarea, LoadingSpinner
 ├── rtms/              # RTMS transcript ingestion (npm workspace)
 │   └── src/index.js

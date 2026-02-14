@@ -88,6 +88,14 @@ export default function AppShell() {
                 placeholder="Search transcripts..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchQuery.trim()) {
+                    setSearchOpen(false);
+                    setSearchResults([]);
+                    navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+                    setSearchQuery('');
+                  }
+                }}
                 autoFocus
               />
               {searchResults.length > 0 && (

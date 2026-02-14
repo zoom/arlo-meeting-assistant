@@ -20,6 +20,42 @@
   gap: 4px;
 }
 
+/* Title edit */
+.title-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-edit-input {
+  flex: 1;
+  font-family: var(--font-serif) !important;
+  font-size: 1.5rem !important;
+  height: auto;
+  padding: 4px 8px;
+}
+
+.title-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.title-pencil {
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.title-display:hover .title-pencil {
+  opacity: 1;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
 .detail-exports {
   display: flex;
   gap: 8px;
@@ -130,4 +166,14 @@
 .action-item-meta {
   display: flex;
   gap: 16px;
+}
+
+/* Destructive outline button */
+.btn-destructive-outline {
+  border-color: color-mix(in srgb, var(--destructive) 50%, transparent) !important;
+  color: var(--destructive) !important;
+}
+
+.btn-destructive-outline:hover {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent) !important;
 }

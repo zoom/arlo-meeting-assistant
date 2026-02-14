@@ -61,16 +61,68 @@
   gap: 8px;
 }
 
-.transcript-status .live-dot-container .live-dot,
-.transcript-status .live-dot-container .live-dot-ping {
-  background: var(--accent);
-}
-
-.paused-dot {
+/* Recording dot (red pulsing) */
+.recording-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--muted-foreground);
+  background: #ef4444;
+}
+
+.recording-dot-ping {
+  position: absolute;
+  inset: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  opacity: 0.75;
+}
+
+/* Paused badge */
+.paused-badge {
+  display: inline-flex;
+  align-items: center;
+  background: color-mix(in srgb, #f97316 10%, transparent);
+  color: #ea580c;
+  border: 1px solid color-mix(in srgb, #f97316 20%, transparent);
+  border-radius: var(--radius-md);
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.dark .paused-badge {
+  color: #fb923c;
+}
+
+/* Transcript paused pill */
+.transcript-paused-pill {
+  position: absolute;
+  top: 16px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 20;
+}
+
+.transcript-paused-pill span {
+  display: inline-block;
+  background: color-mix(in srgb, var(--card) 95%, transparent);
+  padding: 4px 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+}
+
+/* Destructive outline button */
+.btn-destructive-outline {
+  border-color: color-mix(in srgb, var(--destructive) 50%, transparent) !important;
+  color: var(--destructive) !important;
+}
+
+.btn-destructive-outline:hover {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent) !important;
 }
 
 .transcript-controls-buttons {
