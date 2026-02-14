@@ -1,6 +1,6 @@
 # Arlo Meeting Assistant — Project Status
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-13
 **Version:** v1.0
 **Spec:** See [`/SPEC.md`](../SPEC.md) for the authoritative feature specification and version milestones.
 
@@ -10,7 +10,7 @@
 
 Open-source Zoom Apps starter kit for building intelligent meeting assistants using RTMS (Real-Time Media Streams) — no meeting bot required.
 
-**Current state:** The v1.0 UI overhaul is complete. The frontend has been decomposed from a monolithic component into a multi-view architecture with HashRouter, 9 views, 5 context providers, and a shared AppShell. In-client OAuth PKCE is working, OS dark mode detection is implemented, and new API endpoints support the home dashboard. See [SPEC.md](../SPEC.md) for the full feature inventory.
+**Current state:** The v1.0 UI is feature-complete. The frontend has been decomposed from a monolithic component into a multi-view architecture with HashRouter, 10 views, 5 context providers, and a shared AppShell. All Figma Make designs have been ported into the CRA + plain CSS codebase. In-client OAuth PKCE is working, OS dark mode detection is implemented, and new API endpoints support the home dashboard. See [SPEC.md](../SPEC.md) for the full feature inventory.
 
 ---
 
@@ -46,10 +46,10 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
 ## Code Statistics
 
 - **Backend:** ~2,850 lines (7 route files, 3 services, middleware) — JavaScript/Express
-- **Frontend:** ~3,200 lines (9 views, 5 contexts, 1 hook, 6 UI primitives, 7 shared components) — React 18 + `@base-ui/react` + plain CSS
+- **Frontend:** ~4,400 lines (10 views, 5 contexts, 1 hook, 6 UI primitives, 10 shared components) — React 18 + `@base-ui/react` + plain CSS
 - **RTMS:** ~370 lines (ingestion worker) — @zoom/rtms v1.0.2
 - **Documentation:** 15+ guides including reusable Zoom Apps skills
-- **Total:** ~6,400+ lines of production-quality code
+- **Total:** ~7,600+ lines of production-quality code
 
 ---
 
@@ -77,6 +77,16 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
 - **UI primitives** — Button, Card, Badge, Input, Textarea, LoadingSpinner
 - **LiveMeetingBanner** — "Return to live transcript" sticky banner
 - **MeetingCard** — Reusable meeting card component with live badge support
+- **v1.0 Figma UI implementation** (Feb 2026):
+  - **Search Results View** — Full `/search` route with query highlighting, empty/initial states
+  - **Delete Meeting Dialog** — Confirmation dialog + trash button in meeting detail
+  - **Rename Meeting** — Inline title editing with pencil icon, PATCH API save
+  - **Transport Controls** — 3-state (live/paused/stopped) with red recording dot, orange pause badge, destructive stop button
+  - **Guest No-Meeting** — Redesigned with 3 feature cards and "Connect with Zoom" CTA
+  - **Guest In-Meeting** — Enhanced with live badge, summary skeleton, faded transcript preview, CTA card
+  - **Home Dashboard** — Weekly digest, action items with checkboxes, recurring topic badges
+  - **Participant Timeline** — 5th tab in MeetingDetail with colored swimlane bars
+  - **Settings View** — Transcription toggles, AI provider/model/API key config, test connection
 
 ### Not Yet Done
 

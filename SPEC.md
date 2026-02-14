@@ -51,7 +51,7 @@ Persistent header across all authenticated views:
 
 - **Left:** Back arrow (when drilled into a sub-view) or Arlo icon/name (at Home root).
 - **Right:** Search icon, theme toggle, settings gear.
-- **Search:** At 372px, the search icon expands into a full-width input field overlay. Search queries transcript content across all meetings. Results display as a dropdown list of matching meetings — tapping a result navigates to that meeting's detail view.
+- **Search:** At 372px, the search icon expands into a full-width input field overlay. Search queries transcript content across all meetings. Results display as a dropdown list of matching meetings — tapping a result navigates to that meeting's detail view. Pressing Enter in the search input navigates to the full `/search` route.
 
 ### Navigation Model
 
@@ -65,6 +65,7 @@ Back-arrow drill-down. No persistent tab bar or sidebar. The navigation hierarch
 │   ├── /meetings (Meetings List)
 │   │   └── /meetings/[meetingID] (Meeting Detail)
 │   ├── /meeting/{currentMeetingUUID} (In-Meeting — live)
+│   ├── /search?q=... (Search Results)
 │   └── /settings (Settings)
 ```
 
@@ -116,9 +117,13 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 **Access:** Unauthenticated users not currently in a meeting with active Arlo data.
 
 **Rendering:**
-- Brief explanation copy: "Arlo helps you capture meeting context with AI."
-- CTA button: **"Install Arlo"** → navigates to Zoom OAuth / app install flow.
-- No meeting data displayed.
+- Centered layout (min-height 600px) with OwlIcon (64px) at top.
+- Heading: **"Meet Arlo, your AI meeting assistant"** (serif, text-2xl).
+- Three feature cards (vertical stack, text-left), each with icon + title + description:
+  1. Mic icon (accent) + **"Live Transcription"** + "Capture every word without a meeting bot"
+  2. Sparkles icon (accent) + **"AI Summaries"** + "Get key points, action items, and insights"
+  3. Search icon (accent) + **"Searchable History"** + "Find anything across all your meetings"
+- CTA button: **"Connect with Zoom"** (accent, large, full-width) → triggers Zoom OAuth flow via `useZoomAuth`.
 
 **Routing logic:** The app determines guest vs. auth state on load. If the user is unauthenticated and no `currentMeetingUUID` is available with active transcript data, render this route.
 
@@ -129,9 +134,13 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 **Access:** Unauthenticated users who are in a meeting where the host (an authenticated Arlo user) has active transcript data.
 
 **Rendering:**
-- LLM-generated summary of the current meeting. This is a periodically refreshed summary (not real-time streaming). Poll or re-fetch on an interval.
-- CTA button: **"Install Arlo"** prominently placed.
-- Read-only. No interactive features beyond reading the summary and clicking install.
+- **Meeting header:** Title (serif, 2xl) + Live badge (green pulse dot + "Live" text) if meeting is live.
+- **Summary card:** Displays `meeting.summary` if available; skeleton placeholder with "Summary generating..." if live and no summary yet.
+- **Read-only transcript preview:** ScrollArea with last ~20 transcript segments, opacity 0.6.
+  - Gradient fade overlay at top (from card bg to transparent).
+  - Centered floating pill: **"Sign in to see full transcript"**.
+- **CTA card:** Accent-tinted background with "Install Arlo for full access" heading, 3-bullet feature list, **"Connect with Zoom"** button → triggers OAuth flow via `useZoomAuth`.
+- Read-only. No interactive features beyond reading and clicking install.
 
 **Data dependency:** Requires that the meeting's transcript data is accessible to the server and that an LLM summary has been generated or can be generated on demand.
 
@@ -143,9 +152,21 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 
 **Rendering (content hierarchy, top to bottom):**
 
-1. **This week's highlights** — LLM-generated highlight cards summarizing meetings from the current week. Each highlight is a brief, scannable card.
-2. **Reminders from yesterday** — Takeaways and reminders from the previous day's meetings, derived from transcript data.
-3. **View all meetings** — Link or button navigating to `/meetings`.
+1. **Meeting in Progress card** (conditional) — Accent-tinted card with "Start Transcription" button. Shown when user is in an active Zoom meeting but RTMS is not yet active.
+2. **Weekly Digest card** — "Your week in review" heading with:
+   - Stats row: meeting count + total time (large serif numbers with small sans labels)
+   - Top topics: Badge components (secondary variant)
+   - AI summary text below a border-top separator
+   - Data: hardcoded mock data with TODO for future API endpoint.
+3. **Action Items section** — "Action items this week" heading with:
+   - Cards with checkbox, task text (serif), owner/due/meeting metadata
+   - Completed items filtered out of main list
+   - Data: hardcoded mock data with TODO for API integration.
+4. **Recurring Topics section** — "Recurring topics" heading with:
+   - Card with badge chips (outline variant, hover effect), subtitle "Topics mentioned in 2+ meetings this week"
+5. **This week's highlights** — LLM-generated highlight cards (from `/api/home/highlights`).
+6. **Reminders from yesterday** — Takeaways from previous day's meetings (from `/api/home/reminders`).
+7. **View all meetings** — Full-width outline button navigating to `/meetings`.
 
 **Empty state:** When no meetings exist, replace highlights and reminders with a centered message: *"No meetings yet — Connect your Zoom account or start Arlo in a meeting."*
 
@@ -153,6 +174,7 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 - List of meetings from the current week with LLM-generated summaries/highlights.
 - List of meetings from yesterday with LLM-generated takeaways.
 - Meeting count (to determine empty state).
+- Weekly digest, action items, and recurring topics (currently mock data — API endpoints planned).
 
 ---
 
@@ -174,11 +196,36 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 
 ---
 
+### Route: `/search` — Search Results
+
+**Access:** Authenticated.
+
+**Rendering:**
+- Large search input at top (auto-focused, pre-filled with `?q=` query param), search icon inside input.
+- Result count text: "N results for 'query'"
+- Results as clickable Card components: meeting title (serif), matched transcript text with `<mark>` highlighting, speaker/timestamp/date metadata. Click navigates to `/meetings/[meetingID]`.
+- **Empty state (no results):** OwlIcon + "No results found" + help text.
+- **Initial state (no query):** Search icon + "Search across all your meetings".
+- Data: calls `GET /api/search?q=...` endpoint.
+
+---
+
 ### Route: `/meetings/[meetingID]` — Meeting Detail
 
 **Access:** Authenticated.
 
-**Layout:** Meeting header (title, date, duration) at top, then a tabbed interface below.
+**Layout:** Meeting header (editable title, date, duration) at top, export + delete buttons, then a 5-tab interface below.
+
+**Meeting Title (inline edit):**
+- Default state: Title shows normally; pencil icon appears on hover (opacity transition).
+- Click title: Switch to edit mode — Input field (serif font, text-2xl, auto-focused, text selected), Check button, X button.
+- Enter key: Save via `PATCH /api/meetings/:id` with `{ title }`. Escape key: Cancel.
+- Save shows Loader2 spinner on check button during API call.
+
+**Delete Meeting:**
+- Trash2 icon button in the export row (destructive outline variant).
+- Opens a confirmation dialog: "Delete this meeting?" with warning text, Cancel + Delete buttons.
+- Delete button (red, destructive) calls `DELETE /api/meetings/:id`, then navigates to `/meetings`.
 
 **Tabs:**
 
@@ -204,6 +251,14 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 
 - **Source** is a timestamp that, when clicked, switches to the Transcript tab and scrolls to that timestamp.
 
+#### Tab 5: Timeline
+- Participant timeline visualization showing when each speaker was active.
+- **No data state:** Card with "Timeline data will be available in a future update."
+- **With data:** Time axis (15-minute tick marks) and participant swimlanes.
+  - Participant name (left, fixed 128px width, right-aligned, sans) + horizontal bar (width = duration/meetingDuration %, muted color, rounded).
+  - 5 muted colors cycling: blue, purple, green, orange, pink (light/dark mode variants).
+  - Hover: show duration text inside bar (opacity transition).
+
 **Export (below tabs or in the header area):**
 - Two buttons: **"Export VTT"** and **"Export MD"**.
 - VTT export: Generate a WebVTT file from the transcript data.
@@ -221,6 +276,10 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 
 #### Tab 1: Transcript
 - Live-scrolling transcript with speaker labels and timestamps.
+- **Transport controls card** (above transcript) with 3 states:
+  - **Live (recording):** Pulsing red dot + "Transcribing" label, Pause button (outline), Stop button (destructive outline).
+  - **Paused:** Orange "Paused" badge, Resume button (accent, Play icon), Stop button (destructive outline). "Transcript paused" floating pill above transcript.
+  - **Stopped/not-started:** Start transcription prompt.
 - **Follow-live mode:** On by default. Scrolling up detaches. **"Scroll to live" button** anchored at the bottom of the transcript area to re-attach.
 - **Suggestion bubbles:** Real-time LLM-generated nudges (e.g., "Summarize the last 5 minutes," "This sounds like a commitment — capture it?"). Render as small dismissible chips/bubbles overlaid at the bottom of the transcript area, above the "Scroll to live" button. Informational only — no action on tap beyond dismiss (X button). New suggestions push older ones out or stack with a limit (e.g., max 2–3 visible).
 
@@ -258,12 +317,21 @@ Before transcript data is flowing, the In-Meeting view replaces the tabbed conte
 
 **Access:** Authenticated.
 
-**Rendering:** Two sections, both in a disabled/placeholder state:
+**Rendering:** Page heading "Settings" (serif, 2xl) + subtitle "Configure Arlo's behavior and AI provider" (sans, muted).
 
-1. **Preferences** — Disabled. Muted styling with placeholder text: *"Preferences coming soon."*
-2. **Account** — Disabled. Same treatment: *"Account management coming soon."*
+**Transcription Preferences section:** Heading + Card containing:
+- **"Auto-open in meetings"** — toggle switch + description ("Automatically open Arlo when your Zoom meetings start")
+- Border-top separator
+- **"Auto-start transcription"** — toggle switch + description ("Begin capturing transcript as soon as you join")
+- Toggle: custom CSS switch (44px wide, 24px tall, rounded-full, bg muted when off, bg accent when on).
 
-Both sections should use disabled UI patterns (reduced opacity, non-interactive controls, muted text) to communicate "planned but not yet active."
+**AI Configuration section:** Heading + Card containing:
+- **"AI Provider"** — `<select>` dropdown (OpenRouter, Anthropic, OpenAI, Custom) + helper text
+- **"API Key"** — password input with Eye/EyeOff toggle button (hidden when provider = OpenRouter)
+- **"Model"** — `<select>` dropdown (options change based on provider) + helper text
+- **"Test Connection"** — outline button with status feedback (idle/testing/success/error states using CheckCircle2/XCircle icons)
+
+State is local for now (no backend persistence) — API integration planned.
 
 ---
 
@@ -285,7 +353,9 @@ These components are used across multiple views and should be implemented as reu
 | **AskInput** | Meeting Detail (Tab 1) | Single-question input with inline expandable response |
 | **ActionItemsTable** | Meeting Detail (Tab 4), In-Meeting (Tab 2) | Owner / Task / Due / Source table |
 | **ExportButtons** | Meeting Detail | "Export VTT" and "Export MD" buttons |
-| **EmptyState** | Home, Meetings List | Centered message with contextual copy |
+| **DeleteMeetingDialog** | Meeting Detail | Confirmation dialog for meeting deletion |
+| **ParticipantTimeline** | Meeting Detail (Tab 5) | Swimlane timeline visualization with colored bars per participant |
+| **EmptyState** | Home, Meetings List, Search | Centered message with contextual copy |
 | **Toast** | Global | Error/info notifications, auto-dismiss |
 | **LoadingIndicator** | Global | SVG spinner or skeleton placeholder |
 

@@ -140,6 +140,15 @@ export function MeetingProvider({ children }) {
     }
   }, [rtmsLoading, zoomSdk]);
 
+  // TODO: Wire to actual Zoom SDK pause/resume RTMS when available
+  const pauseRTMS = useCallback(async () => {
+    await stopRTMS();
+  }, [stopRTMS]);
+
+  const resumeRTMS = useCallback(async () => {
+    await startRTMS(false);
+  }, [startRTMS]);
+
   // Send Zoom meeting topic to backend to replace generic "Meeting M/D/YYYY" title
   // Wait for rtmsActive so the meeting record exists in the DB before patching
   useEffect(() => {
@@ -175,6 +184,8 @@ export function MeetingProvider({ children }) {
       autoStartAttemptedRef,
       startRTMS,
       stopRTMS,
+      pauseRTMS,
+      resumeRTMS,
       connectWebSocket,
       setWs,
     }}>

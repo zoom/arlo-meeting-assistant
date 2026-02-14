@@ -193,16 +193,13 @@ export default function InMeetingView() {
                     {transcriptState === 'live' ? (
                       <>
                         <div className="live-dot-container">
-                          <div className="live-dot" />
-                          <div className="live-dot-ping" />
+                          <div className="recording-dot" />
+                          <div className="recording-dot-ping" />
                         </div>
                         <span className="text-sans text-sm text-muted">Transcribing</span>
                       </>
                     ) : (
-                      <>
-                        <div className="paused-dot" />
-                        <span className="text-sans text-sm text-muted">Paused</span>
-                      </>
+                      <span className="paused-badge text-sans">Paused</span>
                     )}
                   </div>
                   <div className="transcript-controls-buttons">
@@ -212,18 +209,18 @@ export default function InMeetingView() {
                           <Pause size={12} />
                           Pause
                         </Button>
-                        <Button variant="outline" size="sm" onClick={handleStop} disabled={rtmsLoading}>
+                        <Button variant="outline" size="sm" className="btn-destructive-outline" onClick={handleStop} disabled={rtmsLoading}>
                           <Square size={12} />
                           Stop
                         </Button>
                       </>
                     ) : (
                       <>
-                        <Button variant="outline" size="sm" onClick={handleResume} disabled={rtmsLoading}>
+                        <Button size="sm" onClick={handleResume} disabled={rtmsLoading}>
                           <Play size={12} />
                           Resume
                         </Button>
-                        <Button variant="outline" size="sm" onClick={handleStop} disabled={rtmsLoading}>
+                        <Button variant="outline" size="sm" className="btn-destructive-outline" onClick={handleStop} disabled={rtmsLoading}>
                           <Square size={12} />
                           Stop
                         </Button>
@@ -235,6 +232,11 @@ export default function InMeetingView() {
 
               {/* Transcript card */}
               <Card className="transcript-live-card">
+                {transcriptState === 'paused' && (
+                  <div className="transcript-paused-pill">
+                    <span className="text-sans text-xs text-muted">Transcript paused</span>
+                  </div>
+                )}
                 <ScrollArea.Root className="transcript-scroll-root">
                   <ScrollArea.Viewport
                     ref={transcriptRef}

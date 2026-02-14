@@ -1,0 +1,115 @@
+.timeline-card {
+  padding: 20px;
+}
+
+.timeline-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Empty state */
+.timeline-empty {
+  padding: 48px 16px;
+  text-align: center;
+}
+
+/* Time axis */
+.timeline-axis {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.timeline-axis-label {
+  width: 128px;
+  flex-shrink: 0;
+}
+
+.timeline-axis-ticks {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+/* Swimlanes */
+.timeline-swimlanes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timeline-swimlane {
+  display: flex;
+  align-items: center;
+  height: 32px;
+}
+
+.timeline-swimlane-name {
+  width: 128px;
+  flex-shrink: 0;
+  text-align: right;
+  padding-right: 16px;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-swimlane-track {
+  flex: 1;
+  position: relative;
+  height: 100%;
+}
+
+.timeline-swimlane-bg {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--muted) 20%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.timeline-swimlane-bar {
+  position: absolute;
+  left: 0;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  transition: opacity 0.15s;
+}
+
+.timeline-swimlane-bar:hover {
+  opacity: 0.8;
+}
+
+.timeline-duration {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.timeline-swimlane-bar:hover .timeline-duration {
+  opacity: 1;
+}
+
+/* Color variants */
+.timeline-bar-blue { background: #bfdbfe; }
+.timeline-bar-purple { background: #ddd6fe; }
+.timeline-bar-green { background: #bbf7d0; }
+.timeline-bar-orange { background: #fed7aa; }
+.timeline-bar-pink { background: #fbcfe8; }
+
+.dark .timeline-bar-blue { background: rgba(59, 130, 246, 0.25); }
+.dark .timeline-bar-purple { background: rgba(139, 92, 246, 0.25); }
+.dark .timeline-bar-green { background: rgba(34, 197, 94, 0.25); }
+.dark .timeline-bar-orange { background: rgba(249, 115, 22, 0.25); }
+.dark .timeline-bar-pink { background: rgba(236, 72, 153, 0.25); }

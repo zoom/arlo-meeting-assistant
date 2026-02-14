@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Tabs, ScrollArea } from '@base-ui/react';
-import { Download } from 'lucide-react';
+import { Download, Trash2, Pencil, Check, X, Loader2 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import DeleteMeetingDialog from '../components/DeleteMeetingDialog';
+import ParticipantTimeline from '../components/ParticipantTimeline';
 import { useZoomSdk } from '../contexts/ZoomSdkContext';
 import './MeetingDetailView.css';
 
@@ -26,6 +28,7 @@ function formatDuration(ms) {
 
 export default function MeetingDetailView() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { zoomSdk, isTestMode } = useZoomSdk();
   const [meeting, setMeeting] = useState(null);
   const [segments, setSegments] = useState([]);
@@ -39,6 +42,10 @@ export default function MeetingDetailView() {
   const [answer, setAnswer] = useState(null);
   const [answerLoading, setAnswerLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('summary');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
   const transcriptRef = useRef(null);
 
   // Fetch meeting data
@@ -153,6 +160,53 @@ export default function MeetingDetailView() {
     openExportUrl(`/api/meetings/${id}/export/markdown`);
   };
 
+  const handleConfirmDelete = async () => {
+    try {
+      await fetch(`/api/meetings/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+    } catch {
+      // Delete failed silently
+    }
+    setDeleteDialogOpen(false);
+    navigate('/meetings');
+  };
+
+  const handleEditTitle = () => {
+    setIsEditingTitle(true);
+    setEditedTitle(meeting.title);
+  };
+
+  const handleSaveTitle = async () => {
+    if (!editedTitle.trim() || editedTitle === meeting.title) {
+      setIsEditingTitle(false);
+      return;
+    }
+    setIsSavingTitle(true);
+    try {
+      const res = await fetch(`/api/meetings/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ title: editedTitle }),
+      });
+      if (res.ok) {
+        setMeeting((prev) => ({ ...prev, title: editedTitle }));
+      }
+    } catch {
+      // Save failed
+    } finally {
+      setIsSavingTitle(false);
+      setIsEditingTitle(false);
+    }
+  };
+
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false);
+    setEditedTitle(meeting.title);
+  };
+
   if (loading) {
     return (
       <div className="detail-loading">
@@ -192,7 +246,33 @@ export default function MeetingDetailView() {
     <div className="meeting-detail-view">
       {/* Header info */}
       <div className="detail-header">
-        <h1 className="text-serif text-2xl">{meeting.title}</h1>
+        {isEditingTitle ? (
+          <div className="title-edit-row">
+            <input
+              type="text"
+              className="input title-edit-input text-serif text-2xl"
+              value={editedTitle}
+              onChange={(e) => setEditedTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveTitle();
+                if (e.key === 'Escape') handleCancelEditTitle();
+              }}
+              autoFocus
+              onFocus={(e) => e.target.select()}
+            />
+            <Button variant="ghost" size="icon" onClick={handleSaveTitle} disabled={isSavingTitle}>
+              {isSavingTitle ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleCancelEditTitle} disabled={isSavingTitle}>
+              <X size={16} />
+            </Button>
+          </div>
+        ) : (
+          <div className="title-display" onClick={handleEditTitle}>
+            <h1 className="text-serif text-2xl">{meeting.title}</h1>
+            <Pencil size={16} className="title-pencil text-muted" />
+          </div>
+        )}
         <p className="text-sans text-sm text-muted">
           {new Date(meeting.startTime).toLocaleDateString('en-US', {
             weekday: 'long',
@@ -214,15 +294,25 @@ export default function MeetingDetailView() {
           <Download size={12} />
           Export MD
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="btn-destructive-outline"
+          onClick={() => setDeleteDialogOpen(true)}
+        >
+          <Trash2 size={12} />
+          Delete
+        </Button>
       </div>
 
       {/* 4-tab view */}
       <Tabs.Root defaultValue="summary" onValueChange={(val) => setActiveTab(val)}>
-        <Tabs.List className="tabs-list" data-cols="4">
+        <Tabs.List className="tabs-list" data-cols="5">
           <Tabs.Tab value="summary" className="tab-trigger">Summary</Tabs.Tab>
           <Tabs.Tab value="transcript" className="tab-trigger">Transcript</Tabs.Tab>
           <Tabs.Tab value="participants" className="tab-trigger">Participants</Tabs.Tab>
           <Tabs.Tab value="tasks" className="tab-trigger">Tasks</Tabs.Tab>
+          <Tabs.Tab value="timeline" className="tab-trigger">Timeline</Tabs.Tab>
         </Tabs.List>
 
         {/* Summary tab */}
@@ -389,7 +479,22 @@ export default function MeetingDetailView() {
             </Card>
           )}
         </Tabs.Panel>
+
+        {/* Timeline tab */}
+        <Tabs.Panel value="timeline" className="detail-tab-panel">
+          <ParticipantTimeline
+            participants={speakers}
+            meetingDuration={duration ? parseInt(duration) : 0}
+          />
+        </Tabs.Panel>
       </Tabs.Root>
+
+      <DeleteMeetingDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        meetingTitle={meeting.title}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

@@ -175,6 +175,7 @@ a:hover {
 .tabs-list[data-cols="2"] { grid-template-columns: 1fr 1fr; }
 .tabs-list[data-cols="3"] { grid-template-columns: 1fr 1fr 1fr; }
 .tabs-list[data-cols="4"] { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.tabs-list[data-cols="5"] { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
 
 .tab-trigger {
   font-family: var(--font-sans);
