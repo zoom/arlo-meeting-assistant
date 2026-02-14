@@ -3,6 +3,18 @@ import { useZoomSdk } from './ZoomSdkContext';
 
 const MeetingContext = createContext();
 
+const DEFAULT_CHAT_NOTICES = {
+  enabled: true,
+  events: { start: true, pause: true, resume: true, stop: false, restart: false },
+  messages: {
+    start: "I'm using a Zoom app, Arlo, to transcribe this meeting and generate a summary.",
+    pause: 'Transcription paused.',
+    resume: 'Transcription resumed.',
+    stop: 'Transcription stopped. Transcript will be available shortly.',
+    restart: 'Transcription restarted.',
+  },
+};
+
 export function MeetingProvider({ children }) {
   const { zoomSdk, meetingContext } = useZoomSdk();
   const [rtmsActive, setRtmsActive] = useState(false);
@@ -13,8 +25,28 @@ export function MeetingProvider({ children }) {
   const meetingStartTimeRef = useRef(null);
   const autoStartAttemptedRef = useRef(false);
   const titleSentRef = useRef(false);
+  const hasBeenActiveRef = useRef(false);
 
   const meetingId = meetingContext?.meetingUUID;
+
+  // Send a chat notice to Zoom meeting chat for a given event type
+  const sendChatNotice = useCallback((eventType) => {
+    if (!zoomSdk) return;
+    try {
+      const raw = localStorage.getItem('arlo-chat-notices');
+      const prefs = raw ? JSON.parse(raw) : DEFAULT_CHAT_NOTICES;
+      if (!prefs.enabled) return;
+      if (!prefs.events?.[eventType]) return;
+      const template = prefs.messages?.[eventType] || DEFAULT_CHAT_NOTICES.messages[eventType];
+      if (!template) return;
+      const message = meetingId
+        ? template.replace(/\[meeting-id\]/g, meetingId)
+        : template;
+      zoomSdk.sendMessageToChat({ message }).catch(() => {});
+    } catch {
+      // Silently ignore — chat notices are best-effort
+    }
+  }, [zoomSdk, meetingId]);
 
   const connectWebSocket = useCallback((token, meetingId) => {
     if (!meetingId || meetingId === 'undefined' || meetingId === 'null') {
@@ -105,6 +137,14 @@ export function MeetingProvider({ children }) {
       }
       sessionStorage.removeItem(startingKey);
 
+      // Send chat notice: restart if previously active, otherwise start
+      if (hasBeenActiveRef.current) {
+        sendChatNotice('restart');
+      } else {
+        sendChatNotice('start');
+        hasBeenActiveRef.current = true;
+      }
+
       zoomSdk.showNotification({
         type: 'success',
         title: 'Arlo',
@@ -120,7 +160,7 @@ export function MeetingProvider({ children }) {
     } finally {
       setRtmsLoading(false);
     }
-  }, [rtmsLoading, zoomSdk, meetingId]);
+  }, [rtmsLoading, zoomSdk, meetingId, sendChatNotice]);
 
   const stopRTMS = useCallback(async () => {
     if (rtmsLoading || !zoomSdk) return;
@@ -130,6 +170,8 @@ export function MeetingProvider({ children }) {
       await zoomSdk.callZoomApi('stopRTMS');
       setRtmsActive(false);
       setRtmsPaused(false);
+
+      sendChatNotice('stop');
 
       zoomSdk.showNotification({
         type: 'info',
@@ -142,7 +184,7 @@ export function MeetingProvider({ children }) {
     } finally {
       setRtmsLoading(false);
     }
-  }, [rtmsLoading, zoomSdk]);
+  }, [rtmsLoading, zoomSdk, sendChatNotice]);
 
   const pauseRTMS = useCallback(async () => {
     if (rtmsLoading || !zoomSdk) return;
@@ -150,12 +192,13 @@ export function MeetingProvider({ children }) {
     try {
       await zoomSdk.callZoomApi('pauseRTMS');
       setRtmsPaused(true);
+      sendChatNotice('pause');
     } catch (error) {
       console.error('pauseRTMS failed:', error);
     } finally {
       setRtmsLoading(false);
     }
-  }, [rtmsLoading, zoomSdk]);
+  }, [rtmsLoading, zoomSdk, sendChatNotice]);
 
   const resumeRTMS = useCallback(async () => {
     if (rtmsLoading || !zoomSdk) return;
@@ -163,12 +206,13 @@ export function MeetingProvider({ children }) {
     try {
       await zoomSdk.callZoomApi('resumeRTMS');
       setRtmsPaused(false);
+      sendChatNotice('resume');
     } catch (error) {
       console.error('resumeRTMS failed:', error);
     } finally {
       setRtmsLoading(false);
     }
-  }, [rtmsLoading, zoomSdk]);
+  }, [rtmsLoading, zoomSdk, sendChatNotice]);
 
   // Send Zoom meeting topic to backend to replace generic "Meeting M/D/YYYY" title
   // Wait for rtmsActive so the meeting record exists in the DB before patching

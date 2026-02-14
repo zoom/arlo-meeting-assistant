@@ -77,6 +77,7 @@ app.use('/api/ai', require('./routes/ai'));
 app.use('/api/rtms', require('./routes/rtms'));
 app.use('/api/highlights', require('./routes/highlights'));
 app.use('/api/home', require('./routes/home'));
+app.use('/api/preferences', require('./routes/preferences'));
 
 // =============================================================================
 // FRONTEND PROXY (with friendly startup page)
