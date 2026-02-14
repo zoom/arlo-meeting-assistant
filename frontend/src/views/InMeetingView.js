@@ -21,14 +21,13 @@ function formatTimestamp(ms) {
 
 export default function InMeetingView() {
   useParams(); // id available from route but meetingId comes from context
-  const { ws, rtmsActive, rtmsLoading, startRTMS, stopRTMS, meetingId, connectWebSocket } = useMeeting();
+  const { ws, rtmsActive, rtmsPaused, rtmsLoading, startRTMS, stopRTMS, pauseRTMS, resumeRTMS, meetingId, connectWebSocket } = useMeeting();
   const { isAuthenticated, wsToken } = useAuth();
   const { meetingContext, isTestMode, runningContext } = useZoomSdk();
   const { authorize } = useZoomAuth();
 
   const [segments, setSegments] = useState([]);
   const [followLive, setFollowLive] = useState(true);
-  const [paused, setPaused] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [notes, setNotes] = useState('');
   const [tasks, setTasks] = useState([]);
@@ -113,22 +112,19 @@ export default function InMeetingView() {
   };
 
   const handlePause = () => {
-    stopRTMS();
-    setPaused(true);
+    pauseRTMS();
   };
 
   const handleResume = () => {
-    startRTMS(false);
-    setPaused(false);
+    resumeRTMS();
   };
 
   const handleStop = () => {
     stopRTMS();
-    setPaused(false);
   };
 
   // Determine transcript state
-  const transcriptState = paused
+  const transcriptState = rtmsPaused
     ? 'paused'
     : rtmsActive && segments.length > 0
       ? 'live'

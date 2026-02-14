@@ -6,6 +6,7 @@ const MeetingContext = createContext();
 export function MeetingProvider({ children }) {
   const { zoomSdk, meetingContext } = useZoomSdk();
   const [rtmsActive, setRtmsActive] = useState(false);
+  const [rtmsPaused, setRtmsPaused] = useState(false);
   const [rtmsLoading, setRtmsLoading] = useState(false);
   const [ws, setWs] = useState(null);
 
@@ -55,6 +56,7 @@ export function MeetingProvider({ children }) {
             setRtmsActive(true);
           } else if (message.data.status === 'rtms_stopped') {
             setRtmsActive(false);
+            setRtmsPaused(false);
           }
           break;
         default:
@@ -127,6 +129,7 @@ export function MeetingProvider({ children }) {
     try {
       await zoomSdk.callZoomApi('stopRTMS');
       setRtmsActive(false);
+      setRtmsPaused(false);
 
       zoomSdk.showNotification({
         type: 'info',
@@ -135,19 +138,37 @@ export function MeetingProvider({ children }) {
       }).catch(() => {});
     } catch {
       setRtmsActive(false);
+      setRtmsPaused(false);
     } finally {
       setRtmsLoading(false);
     }
   }, [rtmsLoading, zoomSdk]);
 
-  // TODO: Wire to actual Zoom SDK pause/resume RTMS when available
   const pauseRTMS = useCallback(async () => {
-    await stopRTMS();
-  }, [stopRTMS]);
+    if (rtmsLoading || !zoomSdk) return;
+    setRtmsLoading(true);
+    try {
+      await zoomSdk.callZoomApi('pauseRTMS');
+      setRtmsPaused(true);
+    } catch (error) {
+      console.error('pauseRTMS failed:', error);
+    } finally {
+      setRtmsLoading(false);
+    }
+  }, [rtmsLoading, zoomSdk]);
 
   const resumeRTMS = useCallback(async () => {
-    await startRTMS(false);
-  }, [startRTMS]);
+    if (rtmsLoading || !zoomSdk) return;
+    setRtmsLoading(true);
+    try {
+      await zoomSdk.callZoomApi('resumeRTMS');
+      setRtmsPaused(false);
+    } catch (error) {
+      console.error('resumeRTMS failed:', error);
+    } finally {
+      setRtmsLoading(false);
+    }
+  }, [rtmsLoading, zoomSdk]);
 
   // Send Zoom meeting topic to backend to replace generic "Meeting M/D/YYYY" title
   // Wait for rtmsActive so the meeting record exists in the DB before patching
@@ -177,6 +198,7 @@ export function MeetingProvider({ children }) {
   return (
     <MeetingContext.Provider value={{
       rtmsActive,
+      rtmsPaused,
       rtmsLoading,
       ws,
       meetingId,

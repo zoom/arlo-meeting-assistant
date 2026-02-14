@@ -87,6 +87,7 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
   - **Home Dashboard** — Weekly digest, action items with checkboxes, recurring topic badges
   - **Participant Timeline** — 5th tab in MeetingDetail with colored swimlane bars
   - **Settings View** — Transcription toggles, AI provider/model/API key config, test connection
+  - **Pause/Resume RTMS** — Real `pauseRTMS`/`resumeRTMS` SDK calls, `rtmsPaused` state in MeetingContext
 
 ### Not Yet Done
 
