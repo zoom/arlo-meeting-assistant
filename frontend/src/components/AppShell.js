@@ -41,12 +41,12 @@ export default function AppShell() {
 
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`, {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=5`, {
           credentials: 'include',
         });
         if (res.ok) {
           const data = await res.json();
-          setSearchResults(data.results || []);
+          setSearchResults((data.results || []).slice(0, 5));
         }
       } catch {
         // Search failed silently
@@ -85,7 +85,7 @@ export default function AppShell() {
               <input
                 type="text"
                 className="input search-input"
-                placeholder="Search transcripts..."
+                placeholder="Search meetings..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -106,9 +106,13 @@ export default function AppShell() {
                       className="search-result"
                       onClick={() => handleResultClick(result)}
                     >
-                      <span className="search-result-title text-serif">{result.meetingTitle}</span>
+                      <span className="search-result-title text-serif">
+                        {result.meetingTitle}
+                        {result.type === 'title' && <span className="search-type-badge">Title</span>}
+                        {result.type === 'summary' && <span className="search-type-badge">Summary</span>}
+                      </span>
                       <span className="search-result-snippet text-muted text-xs">
-                        {result.snippet}
+                        {result.snippet || (result.type === 'title' ? `${result.segmentCount} segments` : '')}
                       </span>
                     </button>
                   ))}

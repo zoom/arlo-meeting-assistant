@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, FileText, Sparkles } from 'lucide-react';
 import Card from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
 import OwlIcon from '../components/OwlIcon';
 import './SearchResultsView.css';
 
@@ -20,19 +21,40 @@ function highlightQuery(text, query) {
   );
 }
 
+function formatDate(date) {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatTimestamp(ms) {
+  if (!ms) return null;
+  const totalSeconds = Math.floor(Number(ms) / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 export default function SearchResultsView() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const query = searchParams.get('q') || '';
   const [searchQuery, setSearchQuery] = useState(query);
-  const [results, setResults] = useState([]);
+  const [titleResults, setTitleResults] = useState([]);
+  const [summaryResults, setSummaryResults] = useState([]);
+  const [transcriptResults, setTranscriptResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
   useEffect(() => {
     setSearchQuery(query);
     if (!query.trim()) {
-      setResults([]);
+      setTitleResults([]);
+      setSummaryResults([]);
+      setTranscriptResults([]);
       setSearched(false);
       return;
     }
@@ -47,7 +69,9 @@ export default function SearchResultsView() {
         });
         if (res.ok) {
           const data = await res.json();
-          setResults(data.results || []);
+          setTitleResults(data.titleResults || []);
+          setSummaryResults(data.summaryResults || []);
+          setTranscriptResults(data.transcriptResults || []);
         }
       } catch {
         // Search failed silently
@@ -65,6 +89,10 @@ export default function SearchResultsView() {
       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
     }
   };
+
+  const totalCount = titleResults.length + summaryResults.length + transcriptResults.length;
+  const hasResults = totalCount > 0;
+  const hasMultipleSections = [titleResults, summaryResults, transcriptResults].filter(a => a.length > 0).length > 1;
 
   return (
     <div className="search-results-view">
@@ -84,7 +112,7 @@ export default function SearchResultsView() {
 
       {query && searched && !loading && (
         <p className="search-result-count">
-          {results.length} {results.length === 1 ? 'result' : 'results'} for &ldquo;{query}&rdquo;
+          {totalCount} {totalCount === 1 ? 'result' : 'results'} for &ldquo;{query}&rdquo;
         </p>
       )}
 
@@ -92,39 +120,112 @@ export default function SearchResultsView() {
         <div className="search-empty">
           <p className="text-muted text-sm">Searching...</p>
         </div>
-      ) : results.length > 0 ? (
+      ) : hasResults ? (
         <div className="search-results-list">
-          {results.map((result, i) => (
-            <Card
-              key={i}
-              className="search-result-card"
-              onClick={() => navigate(`/meetings/${result.meetingId}`)}
-            >
-              <div className="search-result-inner">
-                <div className="search-result-text-group">
-                  <h3 className="text-serif font-medium">{result.meetingTitle}</h3>
-                  <p className="text-serif text-sm search-highlight">
-                    {highlightQuery(result.snippet || result.text, query)}
-                  </p>
+          {titleResults.length > 0 && (
+            <>
+              {hasMultipleSections && (
+                <div className="search-section-label">
+                  <FileText size={14} />
+                  <span>Meetings</span>
                 </div>
-                <div className="search-result-meta">
-                  {result.speaker && <span>{result.speaker}</span>}
-                  {result.speaker && <span>&bull;</span>}
-                  {result.timestamp && <span>{result.timestamp}</span>}
-                  {result.timestamp && <span>&bull;</span>}
-                  {result.date && (
-                    <span>
-                      {new Date(result.date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
-                    </span>
-                  )}
+              )}
+              {titleResults.map((result, i) => (
+                <Card
+                  key={`title-${i}`}
+                  className="search-result-card"
+                  onClick={() => navigate(`/meetings/${result.meetingId}`)}
+                >
+                  <div className="search-result-inner">
+                    <div className="search-result-text-group">
+                      <h3 className="text-serif font-medium search-highlight">
+                        {highlightQuery(result.meetingTitle, query)}
+                      </h3>
+                    </div>
+                    <div className="search-result-meta">
+                      <span>{result.segmentCount} segments</span>
+                      <span>&bull;</span>
+                      <span>{formatDate(result.meetingDate)}</span>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </>
+          )}
+
+          {summaryResults.length > 0 && (
+            <>
+              {hasMultipleSections && (
+                <div className="search-section-label">
+                  <Sparkles size={14} />
+                  <span>In Summaries</span>
                 </div>
-              </div>
-            </Card>
-          ))}
+              )}
+              {summaryResults.map((result, i) => (
+                <Card
+                  key={`summary-${i}`}
+                  className="search-result-card"
+                  onClick={() => navigate(`/meetings/${result.meetingId}`)}
+                >
+                  <div className="search-result-inner">
+                    <div className="search-result-text-group">
+                      <h3 className="text-serif font-medium">{result.meetingTitle}</h3>
+                      <p className="text-serif text-sm search-highlight">
+                        {highlightQuery(result.snippet, query)}
+                      </p>
+                    </div>
+                    <div className="search-result-meta">
+                      {result.matchField && (
+                        <>
+                          <Badge variant="secondary">{result.matchField}</Badge>
+                          <span>&bull;</span>
+                        </>
+                      )}
+                      <span>{formatDate(result.meetingDate)}</span>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </>
+          )}
+
+          {transcriptResults.length > 0 && (
+            <>
+              {hasMultipleSections && (
+                <div className="search-section-label">
+                  <Search size={14} />
+                  <span>In Transcripts</span>
+                </div>
+              )}
+              {transcriptResults.map((result, i) => (
+                <Card
+                  key={`transcript-${i}`}
+                  className="search-result-card"
+                  onClick={() => navigate(`/meetings/${result.meetingId}`)}
+                >
+                  <div className="search-result-inner">
+                    <div className="search-result-text-group">
+                      <h3 className="text-serif font-medium">{result.meetingTitle}</h3>
+                      <p className="text-serif text-sm search-highlight">
+                        {highlightQuery(result.snippet || result.text, query)}
+                      </p>
+                    </div>
+                    <div className="search-result-meta">
+                      {result.speaker && <span>{result.speaker}</span>}
+                      {result.speaker && <span>&bull;</span>}
+                      {formatTimestamp(result.tStartMs) && (
+                        <>
+                          <span>{formatTimestamp(result.tStartMs)}</span>
+                          <span>&bull;</span>
+                        </>
+                      )}
+                      <span>{formatDate(result.meetingDate)}</span>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </>
+          )}
         </div>
       ) : searched && query ? (
         <div className="search-empty">

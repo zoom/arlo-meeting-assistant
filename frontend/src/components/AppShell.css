@@ -91,6 +91,21 @@
   white-space: nowrap;
 }
 
+.search-type-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-family: var(--font-sans);
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: var(--radius-sm);
+  vertical-align: middle;
+}
+
 /* Main content */
 .app-main {
   flex: 1;
