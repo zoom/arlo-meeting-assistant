@@ -15,6 +15,8 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 - [x] **Delete meetings from UI** — Delete button with confirmation dialog on both `MeetingDetailView` and `MeetingsListView`, using the existing `DELETE /api/meetings/:id` endpoint.
 - [x] **Rename meetings from UI** — Inline title editing in `MeetingDetailView` header, using the existing `PATCH /api/meetings/:id` endpoint.
 - [x] **Pause/resume RTMS** — Transport controls now use real `pauseRTMS`/`resumeRTMS` Zoom SDK calls instead of stop/start workaround. Paused state lifted into `MeetingContext` (`rtmsPaused`).
+- [x] **AI-generated meeting title** — Sparkle icon in `MeetingDetailView` calls the backend to generate a concise title from the transcript/summary. Generated title pre-fills the inline editor for review.
+- [x] **AI-powered home dashboard** — Home page features an AI-generated weekly digest, smart reminders extracted from action items across meetings, and cross-meeting insights (recurring topics, follow-up tracking).
 
 ---
 
@@ -24,11 +26,6 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 `advanced` · Backend webhooks, frontend state management
 
 Zoom supports automatic RTMS start at three levels: account-wide, group, and per-user. The app currently has a basic auto-start timer in `InMeetingView.js` (line 55), but it doesn't handle the full matrix of scenarios. This item covers: host-initiated auto-start via webhook, participant-triggered RTMS with optional host approval, and suppressing auto-restart when the user has explicitly stopped transcription. See also the related known issue below.
-
-### AI-generated meeting title
-`good-first-issue` · `backend/src/services/openrouter.js`, `backend/src/routes/ai.js`, `frontend/src/views/MeetingDetailView.js`
-
-A sparkle icon next to the meeting title in `MeetingDetailView` calls `POST /api/ai/generate-title` to produce a concise, descriptive title from the transcript or cached summary. The generated title pre-fills the inline editor so the user can review and tweak before saving.
 
 ### Improve search experience
 `intermediate` · `frontend/src/components/AppShell.js`, `backend/src/routes/search.js`
@@ -63,11 +60,6 @@ See the Documentation TODOs section below for specific items.
 ---
 
 ## Medium-term (v1.1)
-
-### AI-powered home dashboard
-`intermediate` · `frontend/src/views/HomeView.js`, `backend/src/routes/home.js`
-
-The home page currently shows basic highlights and reminders. This item adds an AI-generated weekly digest, smart reminders extracted from action items across meetings, and cross-meeting insights (recurring topics, follow-up tracking).
 
 ### Participant timeline view
 `advanced` · New DB model, webhook handling, new UI component

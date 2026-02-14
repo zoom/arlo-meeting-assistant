@@ -1,6 +1,6 @@
 # Arlo Meeting Assistant — Project Status
 
-**Last Updated:** 2026-02-13
+**Last Updated:** 2026-02-14
 **Version:** v1.0
 **Spec:** See [`/SPEC.md`](../SPEC.md) for the authoritative feature specification and version milestones.
 
@@ -84,7 +84,8 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
   - **Transport Controls** — 3-state (live/paused/stopped) with red recording dot, orange pause badge, destructive stop button
   - **Guest No-Meeting** — Redesigned with 3 feature cards and "Connect with Zoom" CTA
   - **Guest In-Meeting** — Enhanced with live badge, summary skeleton, faded transcript preview, CTA card
-  - **Home Dashboard** — Weekly digest, action items with checkboxes, recurring topic badges
+  - **Home Dashboard** — Weekly digest, action items with checkboxes, recurring topic badges, AI-powered weekly digest and cross-meeting insights
+  - **AI-generated meeting titles** — Sparkle icon generates descriptive title from transcript/summary
   - **Participant Timeline** — 5th tab in MeetingDetail with colored swimlane bars
   - **Settings View** — Transcription toggles, AI provider/model/API key config, test connection
   - **Pause/Resume RTMS** — Real `pauseRTMS`/`resumeRTMS` SDK calls, `rtmsPaused` state in MeetingContext
