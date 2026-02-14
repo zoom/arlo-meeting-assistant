@@ -17,6 +17,7 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 - [x] **Pause/resume RTMS** — Transport controls now use real `pauseRTMS`/`resumeRTMS` Zoom SDK calls instead of stop/start workaround. Paused state lifted into `MeetingContext` (`rtmsPaused`).
 - [x] **AI-generated meeting title** — Sparkle icon in `MeetingDetailView` calls the backend to generate a concise title from the transcript/summary. Generated title pre-fills the inline editor for review.
 - [x] **AI-powered home dashboard** — Home page features an AI-generated weekly digest, smart reminders extracted from action items across meetings, and cross-meeting insights (recurring topics, follow-up tracking).
+- [x] **Multi-source search** — Search now queries meeting titles, AI summaries (JSONB fields), and transcripts in parallel. Results are prioritized by source (titles first, summaries second, transcripts third) with section labels when multiple categories match. AppShell dropdown shows type badges and limits to 5 results.
 
 ---
 
@@ -27,15 +28,24 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 
 Zoom supports automatic RTMS start at three levels: account-wide, group, and per-user. The app currently has a basic auto-start timer in `InMeetingView.js` (line 55), but it doesn't handle the full matrix of scenarios. This item covers: host-initiated auto-start via webhook, participant-triggered RTMS with optional host approval, and suppressing auto-restart when the user has explicitly stopped transcription. See also the related known issue below.
 
-### Improve search experience
-`intermediate` · `frontend/src/components/AppShell.js`, `backend/src/routes/search.js`
+### Chat notices
+`intermediate` · `frontend/src/views/InMeetingView.js`, `frontend/src/views/SettingsView.js`, Zoom Apps SDK
 
-Search currently queries transcript text via Postgres full-text search. This item expands search to include meeting titles, speaker names, and AI-generated summaries. Consider adding a dedicated search results view instead of only showing results in the header dropdown.
+Send automatic messages to the Zoom meeting chat via `zoomSdk.sendMessage()` when transcription events occur, so all participants know Arlo is active. Designs are in the `FIGMA/` directory.
 
-### Send messages to Zoom meeting chat
-`intermediate` · `frontend/src/views/InMeetingView.js`, Zoom Apps SDK
+**Event triggers:** Configurable notifications for five transcription lifecycle events — starts, pauses, resumes, stops, and restarts. Each event has an independent toggle so users can choose exactly which transitions notify the chat.
 
-Use `zoomSdk.sendMessage()` to post status messages to the meeting chat visible to all participants — for example, "Arlo is now transcribing" when RTMS starts, or sharing a summary snippet when the meeting ends.
+**Customizable message templates:** Each event has an editable message template with sensible defaults. The start message defaults to a multi-line notice including a live transcript link and privacy policy URL. Other events default to short one-liners (e.g. "Transcription paused."). Templates support a `[meeting-id]` placeholder that gets interpolated at send time.
+
+**Link support:** Messages can include URLs to external resources — live transcript pages, privacy policies, or any other links the user wants to share with participants. The UI hints at this with an ExternalLink icon and helper text.
+
+**Settings UI:** A new "Chat Notifications" section in SettingsView with progressive disclosure:
+1. Master toggle — enable/disable all chat notifications globally
+2. Per-event toggles — starts (on by default), pauses (on), resumes (on), stops (off), restarts (off)
+3. Message template textareas — shown conditionally when the corresponding event toggle is enabled
+4. Live preview panel — shows how the start message will appear in Zoom chat, with `[meeting-id]` replaced by a sample value
+
+**Persistence:** Chat notification preferences (enabled state, event toggles, custom messages) stored per-user, either in the database (new columns or JSON field on User) or via a new UserSettings model.
 
 ### Polish guest mode views
 `intermediate` · `frontend/src/views/GuestInMeetingView.js`, `frontend/src/views/GuestNoMeetingView.js`
