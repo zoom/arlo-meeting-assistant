@@ -1,78 +1,132 @@
 .onboarding-view {
+  min-height: 100vh;
+  background: var(--background);
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  padding: 24px;
+  padding: 16px;
 }
 
-.onboarding-content {
-  max-width: 440px;
-  width: 100%;
-  text-align: center;
+/* Loading state (OAuthLoading) */
+.onboarding-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 24px;
 }
 
+.onboarding-loading-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.onboarding-spinner {
+  color: var(--muted-foreground);
+  animation: spin 1s linear infinite;
+}
+
 .onboarding-owl {
   color: var(--accent);
 }
 
-.onboarding-check {
+/* Success content */
+.onboarding-content {
+  max-width: 600px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Check icon circle */
+.onboarding-icon-wrapper {
+  display: flex;
+  justify-content: center;
+}
+
+.onboarding-check-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 9999px;
+  background: #dcfce7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dark .onboarding-check-circle {
+  background: #052e16;
+}
+
+.onboarding-check-icon {
   color: #16a34a;
 }
 
-.dark .onboarding-check {
-  color: #22c55e;
+.dark .onboarding-check-icon {
+  color: #4ade80;
 }
 
+/* Heading */
 .onboarding-heading {
+  text-align: center;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.onboarding-title {
+  font-size: 1.875rem;
+  font-weight: 500;
 }
 
 /* Steps card */
 .onboarding-steps-card {
   width: 100%;
-  text-align: left;
 }
 
 .onboarding-steps-inner {
-  padding: 20px;
+  padding: 24px;
   display: flex;
   gap: 16px;
-  align-items: flex-start;
 }
 
 .onboarding-steps-icon {
-  color: var(--accent);
-  margin-top: 2px;
   flex-shrink: 0;
+  color: var(--accent);
 }
 
-.onboarding-steps-list {
+.onboarding-steps-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.onboarding-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.onboarding-steps {
-  margin: 0;
-  padding-left: 20px;
+.onboarding-step-item {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 0.875rem;
-  color: var(--muted-foreground);
-  line-height: 1.5;
+  gap: 12px;
 }
 
-.onboarding-steps li::marker {
-  color: var(--accent);
-  font-weight: 600;
+.onboarding-step-num {
+  flex-shrink: 0;
+  color: var(--foreground);
+}
+
+/* Actions */
+.onboarding-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .onboarding-open-zoom {

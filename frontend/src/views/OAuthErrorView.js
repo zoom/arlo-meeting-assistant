@@ -4,12 +4,22 @@ import { AlertCircle } from 'lucide-react';
 import Button from '../components/ui/Button';
 import './OAuthErrorView.css';
 
-const ERROR_MESSAGES = {
-  access_denied: 'The authorization was denied. You need to approve access for Arlo to connect to your Zoom account.',
-  missing_code: 'No authorization code was received from Zoom. Please try again.',
-  token_exchange_failed: 'We couldn\'t complete the connection to Zoom. The authorization code may have expired.',
-  server_error: 'Something went wrong on our end. Please try again.',
-};
+function getErrorMessage(error) {
+  switch (error) {
+    case 'access_denied':
+      return "We couldn't connect to your Zoom account. This may happen if the authorization was denied or expired.";
+    case 'invalid_code':
+      return 'The authorization code is invalid or has expired. Please try again.';
+    case 'token_exchange_failed':
+      return "We couldn't complete the connection to Zoom. The authorization code may have expired.";
+    case 'server_error':
+      return 'An unexpected error occurred on our servers. Please try again later.';
+    case 'missing_code':
+      return 'No authorization code was received from Zoom. Please try again.';
+    default:
+      return "We couldn't connect to your Zoom account. This may happen if the authorization was denied or expired.";
+  }
+}
 
 export default function OAuthErrorView() {
   const [searchParams] = useSearchParams();
@@ -17,21 +27,29 @@ export default function OAuthErrorView() {
 
   const errorCode = searchParams.get('error') || 'unknown';
   const customMessage = searchParams.get('message');
-  const displayMessage = customMessage || ERROR_MESSAGES[errorCode] ||
-    'We couldn\'t connect to your Zoom account. This may happen if the authorization was denied or expired.';
+  const displayMessage = customMessage || getErrorMessage(errorCode);
 
   return (
     <div className="oauth-error-view">
       <div className="oauth-error-content">
-        <AlertCircle size={64} className="oauth-error-icon" />
-
-        <div className="oauth-error-heading">
-          <h1 className="text-serif text-2xl">Authentication Failed</h1>
-          <p className="text-muted">{displayMessage}</p>
+        {/* Error Icon */}
+        <div className="oauth-error-icon-wrapper">
+          <div className="oauth-error-icon-circle">
+            <AlertCircle size={40} className="oauth-error-icon" />
+          </div>
         </div>
 
+        {/* Heading */}
+        <div className="oauth-error-heading">
+          <h1 className="text-serif oauth-error-title">Authentication Failed</h1>
+          <p className="text-sans text-muted" style={{ lineHeight: 1.625 }}>
+            {displayMessage}
+          </p>
+        </div>
+
+        {/* Actions */}
         <div className="oauth-error-actions">
-          <Button variant="accent" size="lg" onClick={() => { window.location.href = '/api/auth/start'; }}>
+          <Button variant="default" size="lg" onClick={() => { window.location.href = '/api/auth/start'; }}>
             Try Again
           </Button>
           <Button variant="outline" size="lg" onClick={() => navigate('/')}>
