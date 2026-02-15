@@ -65,6 +65,7 @@ Back-arrow drill-down. No persistent tab bar or sidebar. The navigation hierarch
 │   ├── /meetings (Meetings List)
 │   │   └── /meetings/[meetingID] (Meeting Detail)
 │   ├── /meeting/{currentMeetingUUID} (In-Meeting — live)
+│   ├── /upcoming (Upcoming Meetings)
 │   ├── /search?q=... (Search Results)
 │   └── /settings (Settings)
 ```
@@ -152,8 +153,9 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 
 **Rendering (content hierarchy, top to bottom):**
 
-1. **Meeting in Progress card** (conditional) — Accent-tinted card with "Start Transcription" button. Shown when user is in an active Zoom meeting but RTMS is not yet active.
-2. **Weekly Digest card** — "Your week in review" heading with:
+1. **Upcoming Meetings section** — "Upcoming meetings" heading with "View all" link to `/upcoming`. Shows the next 3 scheduled Zoom meetings fetched from `GET /api/zoom-meetings`. Each card shows: meeting topic, date/time range, and an auto-open toggle with "Auto-open" badge when enabled. "View all" navigates to the full `/upcoming` view.
+2. **Meeting in Progress card** (conditional) — Accent-tinted card with "Start Transcription" button. Shown when user is in an active Zoom meeting but RTMS is not yet active.
+3. **Weekly Digest card** — "Your week in review" heading with:
    - Stats row: meeting count + total time (large serif numbers with small sans labels)
    - Top topics: Badge components (secondary variant)
    - AI summary text below a border-top separator
@@ -162,11 +164,11 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
    - Cards with checkbox, task text (serif), owner/due/meeting metadata
    - Completed items filtered out of main list
    - Data: hardcoded mock data with TODO for API integration.
-4. **Recurring Topics section** — "Recurring topics" heading with:
+5. **Recurring Topics section** — "Recurring topics" heading with:
    - Card with badge chips (outline variant, hover effect), subtitle "Topics mentioned in 2+ meetings this week"
-5. **This week's highlights** — LLM-generated highlight cards (from `/api/home/highlights`).
-6. **Reminders from yesterday** — Takeaways from previous day's meetings (from `/api/home/reminders`).
-7. **View all meetings** — Full-width outline button navigating to `/meetings`.
+6. **This week's highlights** — LLM-generated highlight cards (from `/api/home/highlights`).
+7. **Reminders from yesterday** — Takeaways from previous day's meetings (from `/api/home/reminders`).
+8. **View all meetings** — Full-width outline button navigating to `/meetings`.
 
 **Empty state:** When no meetings exist, replace highlights and reminders with a centered message: *"No meetings yet — Connect your Zoom account or start Arlo in a meeting."*
 
@@ -320,9 +322,9 @@ Before transcript data is flowing, the In-Meeting view replaces the tabbed conte
 **Rendering:** Page heading "Settings" (serif, 2xl) + subtitle "Configure Arlo's behavior and AI provider" (sans, muted).
 
 **Transcription Preferences section:** Heading + Card containing:
-- **"Auto-open in meetings"** — toggle switch + description ("Automatically open Arlo when your Zoom meetings start")
+- **"Auto-open in meetings"** — toggle switch + description ("Automatically open Arlo when your Zoom meetings start"). When enabled, expands to show a compact list of upcoming meetings with per-meeting auto-open toggles (fetched from `GET /api/zoom-meetings`). Links to `/upcoming` for full control. Auto-open state persisted via Zoom `open_apps` API and `User.preferences.autoOpenMeetings`.
 - Border-top separator
-- **"Auto-start transcription"** — toggle switch + description ("Begin capturing transcript as soon as you join")
+- **"Auto-start transcription"** — toggle switch + description ("Begin capturing transcript as soon as you join"). Persisted to localStorage and `/api/preferences` API (`autoStartRTMS` key). When enabled, RTMS starts automatically at the provider level (MeetingContext) as soon as the user is authenticated and in a meeting.
 - Toggle: custom CSS switch (44px wide, 24px tall, rounded-full, bg muted when off, bg accent when on).
 
 **AI Configuration section:** Heading + Card containing:
@@ -332,6 +334,30 @@ Before transcript data is flowing, the In-Meeting view replaces the tabbed conte
 - **"Test Connection"** — outline button with status feedback (idle/testing/success/error states using CheckCircle2/XCircle icons)
 
 State is local for now (no backend persistence) — API integration planned.
+
+---
+
+### Route: `/upcoming` — Upcoming Meetings
+
+**Access:** Authenticated.
+
+**Rendering:**
+- Page heading "Upcoming Meetings" (serif, 2xl) + subtitle "Enable auto-open so Arlo launches automatically when a meeting starts" (sans, muted).
+- **Info banner** (blue, dismissible): "Auto-open requires the Zoom Apps Quick Launch setting to be enabled. Zoom allows up to 3 apps per meeting."
+- **Warning banner** (amber, dismissible): Shown when 3+ meetings have auto-open enabled (Zoom's per-meeting app limit).
+- **Meeting list:** Cards for each upcoming Zoom meeting showing:
+  - Meeting topic (serif, bold)
+  - Full date + time range (e.g., "Monday, February 16, 2026 · 8:00 AM – 8:30 AM")
+  - "Recurring" label + Zoom Meeting ID
+  - Auto-open toggle switch (right-aligned) with "Auto-open" label and blue "Auto-open" badge when enabled
+- **Auto-open toggle action:** `POST /api/zoom-meetings/:meetingId/auto-open` to enable, `DELETE /api/zoom-meetings/:meetingId/auto-open` to disable. Calls Zoom's `open_apps` API to register/unregister Arlo for auto-launch.
+- **Sticky bottom bar:** "Manage auto-open preferences" text + link to Settings.
+
+**Data dependencies:**
+- Upcoming meetings from `GET /api/zoom-meetings` (proxies Zoom REST API `GET /v2/users/me/meetings?type=upcoming`).
+- Auto-open state per meeting from user preferences (`User.preferences.autoOpenMeetings` array).
+- Requires `meeting:read` and `meeting:write:open_app` OAuth scopes.
+- Requires `ZOOM_APP_ID` environment variable (Marketplace App ID, different from Client ID).
 
 ---
 
@@ -355,6 +381,8 @@ These components are used across multiple views and should be implemented as reu
 | **ExportButtons** | Meeting Detail | "Export VTT" and "Export MD" buttons |
 | **DeleteMeetingDialog** | Meeting Detail | Confirmation dialog for meeting deletion |
 | **ParticipantTimeline** | Meeting Detail (Tab 5) | Swimlane timeline visualization with colored bars per participant |
+| **InfoBanner** | Upcoming Meetings | Blue dismissible banner for contextual guidance |
+| **WarningBanner** | Upcoming Meetings | Amber dismissible banner for limit warnings |
 | **EmptyState** | Home, Meetings List, Search | Centered message with contextual copy |
 | **Toast** | Global | Error/info notifications, auto-dismiss |
 | **LoadingIndicator** | Global | SVG spinner or skeleton placeholder |
