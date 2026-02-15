@@ -139,6 +139,7 @@ Create purpose-built views for specific use cases: **Healthcare** (HIPAA-aware t
 ## Known Issues
 
 - **Participant webhook events need audit** — `meeting.participant_joined` and `meeting.participant_left` webhooks may be firing but aren't currently used. These events are only relevant when the app is running as the meeting host. Audit whether these create unnecessary processing or noise, and either use them (for the timeline view) or unsubscribe.
+- **"Live meeting in progress" persists after meeting ends** — The `LiveMeetingBanner` and `InMeetingView` remain active after a meeting ends and the user is no longer in the meeting context. `MeetingContext` does not clear the active meeting state when the Zoom meeting ends.
 
 ---
 
