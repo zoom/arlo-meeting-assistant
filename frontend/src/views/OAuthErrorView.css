@@ -1,0 +1,41 @@
+.oauth-error-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.oauth-error-content {
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.oauth-error-icon {
+  color: var(--destructive);
+}
+
+.oauth-error-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.oauth-error-heading p {
+  line-height: 1.6;
+}
+
+.oauth-error-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.oauth-error-actions .btn {
+  flex: 1;
+}

@@ -1,0 +1,80 @@
+.onboarding-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.onboarding-content {
+  max-width: 440px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.onboarding-owl {
+  color: var(--accent);
+}
+
+.onboarding-check {
+  color: #16a34a;
+}
+
+.dark .onboarding-check {
+  color: #22c55e;
+}
+
+.onboarding-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Steps card */
+.onboarding-steps-card {
+  width: 100%;
+  text-align: left;
+}
+
+.onboarding-steps-inner {
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.onboarding-steps-icon {
+  color: var(--accent);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.onboarding-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.onboarding-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+
+.onboarding-steps li::marker {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.onboarding-open-zoom {
+  width: 100%;
+}

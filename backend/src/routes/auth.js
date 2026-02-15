@@ -10,6 +10,165 @@ const prisma = new PrismaClient();
 // Store PKCE challenges temporarily (in production, use Redis)
 const pkceStore = new Map();
 
+// Store web OAuth state params (for CSRF protection)
+const webOAuthStore = new Map();
+
+/**
+ * GET /api/auth/start
+ * Initiate web-based OAuth by redirecting to Zoom's authorization page.
+ * Used when installing from Marketplace or clicking "Install" on the landing page.
+ */
+router.get('/start', (req, res) => {
+  try {
+    const state = generateState();
+
+    // Store state for CSRF validation (expires in 5 minutes)
+    webOAuthStore.set(state, { timestamp: Date.now() });
+    setTimeout(() => webOAuthStore.delete(state), 5 * 60 * 1000);
+
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: config.zoomClientId,
+      redirect_uri: config.redirectUri,
+      state,
+    });
+
+    res.redirect(`https://zoom.us/oauth/authorize?${params.toString()}`);
+  } catch (error) {
+    console.error('Error starting web OAuth:', error);
+    res.redirect(`${config.publicUrl}/#/auth-error?error=server_error&message=${encodeURIComponent('Failed to start authentication')}`);
+  }
+});
+
+/**
+ * GET /api/auth/callback
+ * Handle browser redirect from Zoom after OAuth consent (Marketplace install flow).
+ * Exchanges code for tokens (no PKCE — server-side with client_secret),
+ * creates/upserts user, sets session cookie, redirects to frontend.
+ */
+router.get('/callback', async (req, res) => {
+  try {
+    const { code, state, error: oauthError } = req.query;
+
+    // Handle OAuth denial or error from Zoom
+    if (oauthError) {
+      console.log('OAuth denied by user:', oauthError);
+      return res.redirect(`${config.publicUrl}/#/auth-error?error=${encodeURIComponent(oauthError)}`);
+    }
+
+    if (!code) {
+      return res.redirect(`${config.publicUrl}/#/auth-error?error=missing_code&message=${encodeURIComponent('No authorization code received')}`);
+    }
+
+    // Validate state if present (Marketplace installs may not include state)
+    if (state) {
+      const storedState = webOAuthStore.get(state);
+      if (!storedState) {
+        console.warn('Web OAuth state mismatch — may be a Marketplace install (no state)');
+      } else {
+        webOAuthStore.delete(state);
+      }
+    }
+
+    // Exchange code for tokens (no PKCE — server-side flow)
+    const tokenResponse = await axios.post(
+      'https://zoom.us/oauth/token',
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: config.redirectUri,
+      }),
+      {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${config.zoomClientId}:${config.zoomClientSecret}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
+
+    const { access_token, refresh_token, expires_in, scope } = tokenResponse.data;
+
+    // Get user info — try API first, fall back to JWT decoding
+    let zoomUser;
+    try {
+      const userResponse = await axios.get('https://api.zoom.us/v2/users/me', {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
+      zoomUser = userResponse.data;
+    } catch (apiError) {
+      const tokenPayload = JSON.parse(Buffer.from(access_token.split('.')[1], 'base64').toString());
+      console.log('Falling back to JWT token payload for user info:', tokenPayload);
+      zoomUser = {
+        id: tokenPayload.uid,
+        email: tokenPayload.email || `${tokenPayload.uid}@zoom.user`,
+        first_name: tokenPayload.first_name || 'Zoom',
+        last_name: tokenPayload.last_name || 'User',
+        pic_url: null,
+      };
+    }
+
+    // Check if user already exists (for first-install detection)
+    const existingUser = await prisma.user.findUnique({
+      where: { zoomUserId: zoomUser.id },
+    });
+    const isFirstInstall = !existingUser;
+
+    // Create or update user
+    const user = await prisma.user.upsert({
+      where: { zoomUserId: zoomUser.id },
+      create: {
+        zoomUserId: zoomUser.id,
+        email: zoomUser.email,
+        displayName: `${zoomUser.first_name} ${zoomUser.last_name}`,
+        avatarUrl: zoomUser.pic_url,
+      },
+      update: {
+        email: zoomUser.email,
+        displayName: `${zoomUser.first_name} ${zoomUser.last_name}`,
+        avatarUrl: zoomUser.pic_url,
+      },
+    });
+
+    // Store encrypted tokens
+    const expiresAt = new Date(Date.now() + expires_in * 1000);
+    await prisma.userToken.create({
+      data: {
+        userId: user.id,
+        accessToken: encryptToken(access_token),
+        refreshToken: encryptToken(refresh_token),
+        expiresAt,
+        scopes: scope.split(' '),
+      },
+    });
+
+    // Generate session JWT (24 hours)
+    const sessionToken = generateToken({
+      userId: user.id,
+      zoomUserId: user.zoomUserId,
+      exp: Date.now() + 24 * 60 * 60 * 1000,
+    });
+
+    // Set session cookie (sameSite: lax required for cross-origin OAuth redirect)
+    res.cookie('sessionToken', sessionToken, {
+      httpOnly: true,
+      secure: config.nodeEnv === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    // Redirect to frontend onboarding page
+    const redirectUrl = isFirstInstall
+      ? `${config.publicUrl}/#/welcome?first=true`
+      : `${config.publicUrl}/#/welcome`;
+    console.log(`Web OAuth success — redirecting to ${redirectUrl} (first install: ${isFirstInstall})`);
+    res.redirect(redirectUrl);
+  } catch (error) {
+    console.error('Web OAuth callback error:', error.response?.data || error.message);
+    const message = error.response?.data?.message || error.message || 'Authentication failed';
+    res.redirect(`${config.publicUrl}/#/auth-error?error=token_exchange_failed&message=${encodeURIComponent(message)}`);
+  }
+});
+
 /**
  * GET /api/auth/authorize
  * Generate PKCE challenge for in-client OAuth
@@ -140,7 +299,7 @@ router.post('/callback', async (req, res) => {
     res.cookie('sessionToken', sessionToken, {
       httpOnly: true,
       secure: config.nodeEnv === 'production', // HTTPS only in production
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     });
 
@@ -305,7 +464,7 @@ router.post('/logout', async (req, res) => {
     res.clearCookie('sessionToken', {
       httpOnly: true,
       secure: config.nodeEnv === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
     });
 
     res.json({ message: 'Logged out successfully' });

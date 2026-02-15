@@ -1,0 +1,125 @@
+.landing-page {
+  padding: 0 24px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* Hero */
+.landing-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 64px 0 48px;
+  gap: 20px;
+}
+
+.landing-owl {
+  color: var(--accent);
+}
+
+.landing-title {
+  max-width: 500px;
+  line-height: 1.2;
+}
+
+.landing-subtitle {
+  max-width: 480px;
+  line-height: 1.6;
+}
+
+.landing-hero-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* Sections */
+.landing-section {
+  padding: 48px 0;
+  border-top: 1px solid var(--border);
+}
+
+.landing-section-title {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+/* Feature grid */
+.landing-features-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 540px) {
+  .landing-features-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.landing-feature-card {
+  text-align: left;
+}
+
+.landing-feature-inner {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.landing-feature-icon {
+  color: var(--accent);
+}
+
+/* Steps */
+.landing-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.landing-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.landing-step-number {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+}
+
+.landing-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+/* Bottom CTA */
+.landing-bottom-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  text-align: center;
+}
+
+/* Footer */
+.landing-footer {
+  padding: 32px 0;
+  text-align: center;
+  border-top: 1px solid var(--border);
+}

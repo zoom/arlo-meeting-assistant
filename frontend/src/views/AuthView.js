@@ -11,7 +11,7 @@ import './AuthView.css';
 export default function AuthView() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, login } = useAuth();
-  const { isTestMode, runningContext, meetingContext } = useZoomSdk();
+  const { runningContext, meetingContext } = useZoomSdk();
   const { authorize, isAuthorizing, error } = useZoomAuth();
 
   const getPostAuthDestination = useCallback(() => {
@@ -28,13 +28,13 @@ export default function AuthView() {
     navigate(getPostAuthDestination(), { replace: true });
   }, [isAuthenticated, runningContext, navigate, getPostAuthDestination]);
 
-  // In test mode, allow bypass
+  // In explicit dev mode (?test=true), allow auth bypass
   useEffect(() => {
-    if (isTestMode) {
+    if (window.location.search.includes('test=true')) {
       login({ displayName: 'Test User' });
       navigate('/home', { replace: true });
     }
-  }, [isTestMode, login, navigate]);
+  }, [login, navigate]);
 
   const handleConnect = async () => {
     try {
