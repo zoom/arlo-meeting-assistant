@@ -38,6 +38,7 @@ export function ZoomSdkProvider({ children }) {
             'showNotification',
             'sendMessageToChat',
             'openUrl',
+            'onRunningContextChange',
           ],
           version: '0.16.0',
         });
@@ -54,9 +55,8 @@ export function ZoomSdkProvider({ children }) {
         const user = await zoomSdk.getUserContext();
         setUserContext(user);
 
-        // Get meeting context (if in meeting)
-        if (context === 'inMeeting') {
-          let meetingData = {};
+        async function fetchMeetingContext() {
+          let data = {};
           let meetingUUID = null;
 
           try {
@@ -75,21 +75,38 @@ export function ZoomSdkProvider({ children }) {
             if (!meetingUUID && meeting) {
               meetingUUID = meeting.meetingUUID || meeting.meetingId || meeting.uuid || meeting.id;
             }
-            meetingData = { ...meetingData, ...meeting };
-            // Capture the numeric meeting ID (e.g. "123-456-789") if available
+            data = { ...data, ...meeting };
             if (meeting?.meetingID) {
-              meetingData.meetingID = meeting.meetingID;
+              data.meetingID = meeting.meetingID;
             }
           } catch {
             // Could not get meeting context
           }
 
           if (meetingUUID) {
-            meetingData.meetingUUID = meetingUUID;
+            data.meetingUUID = meetingUUID;
           }
 
+          return data;
+        }
+
+        // Get meeting context (if in meeting)
+        if (context === 'inMeeting') {
+          const meetingData = await fetchMeetingContext();
           setMeetingContext(meetingData);
         }
+
+        // Listen for context changes (e.g. user joins/leaves a meeting)
+        zoomSdk.onRunningContextChange(async (event) => {
+          const newContext = event.runningContext;
+          setRunningContext(newContext);
+          if (newContext === 'inMeeting') {
+            const meetingData = await fetchMeetingContext();
+            setMeetingContext(meetingData);
+          } else {
+            setMeetingContext(null);
+          }
+        });
       } catch (error) {
         console.error('SDK Configuration Error:', error);
         setSdkError(error.message);

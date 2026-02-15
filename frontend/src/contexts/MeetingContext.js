@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useZoomSdk } from './ZoomSdkContext';
+import { useAuth } from './AuthContext';
 
 const MeetingContext = createContext();
 
@@ -213,6 +214,21 @@ export function MeetingProvider({ children }) {
       setRtmsLoading(false);
     }
   }, [rtmsLoading, zoomSdk, sendChatNotice]);
+
+  // Stable ref to startRTMS so the auto-start timer isn't cancelled
+  // when the callback reference changes (sendChatNotice/meetingId stabilising)
+  const startRTMSRef = useRef(startRTMS);
+  useEffect(() => { startRTMSRef.current = startRTMS; }, [startRTMS]);
+
+  // Auto-start RTMS when authenticated and in a meeting (conditional on user preference)
+  const { isAuthenticated } = useAuth();
+  useEffect(() => {
+    if (autoStartAttemptedRef.current || !isAuthenticated || !meetingId || rtmsActive || rtmsLoading) return;
+    if (localStorage.getItem('arlo-auto-start') === 'false') return;
+    autoStartAttemptedRef.current = true;
+    const timer = setTimeout(() => startRTMSRef.current(true), 1500);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, meetingId, rtmsActive, rtmsLoading]);
 
   // Send Zoom meeting topic to backend to replace generic "Meeting M/D/YYYY" title
   // Wait for rtmsActive so the meeting record exists in the DB before patching
