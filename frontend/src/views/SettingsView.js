@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, CheckCircle2, XCircle, MessageSquare, ExternalLink } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -43,9 +44,17 @@ const DEFAULT_EVENTS = {
   restart: false,
 };
 
+const MOCK_SETTINGS_UPCOMING = [
+  { id: 'u1', title: 'Weekly Product Sync', date: '2026-02-17T10:00:00Z', duration: 30, autoOpenEnabled: true },
+  { id: 'u2', title: 'Q1 Planning Review', date: '2026-02-17T14:00:00Z', duration: 60, autoOpenEnabled: false },
+  { id: 'u3', title: 'Engineering Standup', date: '2026-02-18T09:00:00Z', duration: 15, autoOpenEnabled: false },
+];
+
 export default function SettingsView() {
+  const navigate = useNavigate();
   const [autoOpen, setAutoOpen] = useState(true);
   const [autoStart, setAutoStart] = useState(true);
+  const [settingsUpcoming, setSettingsUpcoming] = useState([]);
   const [provider, setProvider] = useState('openrouter');
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -171,6 +180,44 @@ export default function SettingsView() {
     }).catch(() => {});
   }, [autoStart]);
 
+  // Fetch upcoming meetings for auto-open section
+  useEffect(() => {
+    if (!autoOpen) return;
+    fetch('/api/zoom-meetings', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.meetings) {
+          setSettingsUpcoming(data.meetings.slice(0, 3));
+        } else {
+          setSettingsUpcoming(MOCK_SETTINGS_UPCOMING);
+        }
+      })
+      .catch(() => setSettingsUpcoming(MOCK_SETTINGS_UPCOMING));
+  }, [autoOpen]);
+
+  const toggleSettingsUpcoming = async (meetingId) => {
+    const meeting = settingsUpcoming.find((m) => m.id === meetingId);
+    if (!meeting) return;
+    const wasEnabled = meeting.autoOpenEnabled;
+    setSettingsUpcoming((prev) =>
+      prev.map((m) => (m.id === meetingId ? { ...m, autoOpenEnabled: !m.autoOpenEnabled } : m))
+    );
+    try {
+      await fetch(`/api/zoom-meetings/${meetingId}/auto-open`, {
+        method: wasEnabled ? 'DELETE' : 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // keep optimistic state
+    }
+  };
+
+  const formatSettingsDate = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) +
+      ' · ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
   const handleProviderChange = (newProvider) => {
     setProvider(newProvider);
     const firstModel = MODELS[newProvider]?.[0]?.value || '';
@@ -220,6 +267,43 @@ export default function SettingsView() {
                 <span className="settings-toggle-thumb" />
               </label>
             </div>
+
+            {autoOpen && (
+              <div className="settings-auto-open-expand">
+                <p className="text-sans text-sm text-muted">
+                  Arlo will automatically open when your meetings start. You can choose which meetings below.
+                </p>
+
+                <div className="settings-upcoming-list">
+                  {settingsUpcoming.map((meeting) => (
+                    <div key={meeting.id} className="settings-upcoming-row">
+                      <div className="settings-upcoming-info">
+                        <p className="text-sans text-sm font-medium">{meeting.title}</p>
+                        <p className="text-sans text-xs text-muted">
+                          {formatSettingsDate(meeting.date)}
+                        </p>
+                      </div>
+                      <label className="settings-toggle settings-toggle-sm">
+                        <input
+                          type="checkbox"
+                          checked={meeting.autoOpenEnabled}
+                          onChange={() => toggleSettingsUpcoming(meeting.id)}
+                        />
+                        <span className="settings-toggle-track" />
+                        <span className="settings-toggle-thumb" />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => navigate('/upcoming')}
+                  className="text-sans settings-manage-link"
+                >
+                  Manage all meetings →
+                </button>
+              </div>
+            )}
 
             <hr className="settings-separator" />
 

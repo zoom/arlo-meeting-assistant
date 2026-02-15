@@ -1,6 +1,6 @@
 # Arlo Meeting Assistant — Project Status
 
-**Last Updated:** 2026-02-14
+**Last Updated:** 2026-02-15
 **Version:** v1.0
 **Spec:** See [`/SPEC.md`](../SPEC.md) for the authoritative feature specification and version milestones.
 
@@ -10,7 +10,7 @@
 
 Open-source Zoom Apps starter kit for building intelligent meeting assistants using RTMS (Real-Time Media Streams) — no meeting bot required.
 
-**Current state:** The v1.0 UI is feature-complete. The frontend has been decomposed from a monolithic component into a multi-view architecture with HashRouter, 10 views, 5 context providers, and a shared AppShell. All Figma Make designs have been ported into the CRA + plain CSS codebase. In-client OAuth PKCE is working, OS dark mode detection is implemented, and new API endpoints support the home dashboard. RTMS auto-start runs at the provider level (MeetingContext) so transcription begins as soon as the user is authenticated and in a meeting, regardless of which view is active. See [SPEC.md](../SPEC.md) for the full feature inventory.
+**Current state:** The v1.0 UI is feature-complete. The frontend has been decomposed from a monolithic component into a multi-view architecture with HashRouter, 11 views, 5 context providers, and a shared AppShell. All Figma Make designs have been ported into the CRA + plain CSS codebase. In-client OAuth PKCE is working, OS dark mode detection is implemented, and new API endpoints support the home dashboard and upcoming meetings. RTMS auto-start runs at the provider level (MeetingContext) so transcription begins as soon as the user is authenticated and in a meeting, regardless of which view is active. Upcoming meetings are fetched from Zoom's REST API with per-meeting auto-open toggles via the `open_apps` API. See [SPEC.md](../SPEC.md) for the full feature inventory.
 
 ---
 
@@ -46,10 +46,10 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
 ## Code Statistics
 
 - **Backend:** ~2,850 lines (7 route files, 3 services, middleware) — JavaScript/Express
-- **Frontend:** ~4,400 lines (10 views, 5 contexts, 1 hook, 6 UI primitives, 10 shared components) — React 18 + `@base-ui/react` + plain CSS
+- **Frontend:** ~4,800 lines (11 views, 5 contexts, 1 hook, 6 UI primitives, 12 shared components) — React 18 + `@base-ui/react` + plain CSS
 - **RTMS:** ~370 lines (ingestion worker) — @zoom/rtms v1.0.2
 - **Documentation:** 15+ guides including reusable Zoom Apps skills
-- **Total:** ~7,600+ lines of production-quality code
+- **Total:** ~8,100+ lines of production-quality code
 
 ---
 
@@ -91,6 +91,7 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
   - **Pause/Resume RTMS** — Real `pauseRTMS`/`resumeRTMS` SDK calls, `rtmsPaused` state in MeetingContext
 - **Provider-level RTMS auto-start** — Auto-start logic moved from InMeetingView to MeetingContext so it fires regardless of which view is active. User lands on HomeView with LiveMeetingBanner linking to the live transcript. Context-aware routing via `getRunningContext()` guards InMeetingView.
 - **Chat notices for transcription lifecycle** — Automatic Zoom chat messages for start/pause/resume/stop/restart with per-event toggles and customizable templates
+- **Upcoming meetings + auto-open** — Zoom REST API integration (`GET /v2/users/me/meetings`, `POST /meetings/{id}/open_apps`) with reusable `zoomApi` service (token auto-refresh, 401 retry). UpcomingMeetingsView with per-meeting auto-open toggles, info/warning banners, sticky bottom bar. Home dashboard shows top 3 upcoming meetings. Settings auto-open toggle reveals compact meeting list. Toast undo support. Requires `meeting:read`, `meeting:write:open_app` scopes and `ZOOM_APP_ID` env var.
 
 ### Not Yet Done
 

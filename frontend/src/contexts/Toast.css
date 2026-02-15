@@ -43,6 +43,21 @@
   flex: 1;
 }
 
+.toast-undo {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.toast-undo:hover {
+  text-decoration: underline;
+}
+
 .toast-dismiss {
   background: none;
   border: none;

@@ -19,6 +19,7 @@ import SettingsView from './views/SettingsView';
 import GuestNoMeetingView from './views/GuestNoMeetingView';
 import GuestInMeetingView from './views/GuestInMeetingView';
 import SearchResultsView from './views/SearchResultsView';
+import UpcomingMeetingsView from './views/UpcomingMeetingsView';
 import NotFoundView from './views/NotFoundView';
 import TestPage from './components/TestPage';
 
@@ -38,6 +39,7 @@ function App() {
                 <Route path="/meeting/:id" element={<InMeetingView />} />
                 <Route path="/search" element={<SearchResultsView />} />
                 <Route path="/settings" element={<SettingsView />} />
+                <Route path="/upcoming" element={<UpcomingMeetingsView />} />
                 <Route path="/test" element={<TestPage />} />
                 <Route path="*" element={<NotFoundView />} />
               </Route>
@@ -74,6 +76,7 @@ function App() {
                       <Route path="/meeting/:id" element={<InMeetingView />} />
                       <Route path="/search" element={<SearchResultsView />} />
                       <Route path="/settings" element={<SettingsView />} />
+                      <Route path="/upcoming" element={<UpcomingMeetingsView />} />
                     </Route>
 
                     {/* 404 */}

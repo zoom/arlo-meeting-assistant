@@ -43,6 +43,7 @@ module.exports = {
   // Zoom App
   zoomClientId: process.env.ZOOM_CLIENT_ID,
   zoomClientSecret: process.env.ZOOM_CLIENT_SECRET,
+  zoomAppId: process.env.ZOOM_APP_ID || null,
   publicUrl: process.env.PUBLIC_URL,
   redirectUri: process.env.ZOOM_APP_REDIRECT_URI || `${process.env.PUBLIC_URL}/api/auth/callback`,
 

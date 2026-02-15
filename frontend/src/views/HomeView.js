@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic } from 'lucide-react';
+import { Mic, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useMeeting } from '../contexts/MeetingContext';
 import Card from '../components/ui/Card';
@@ -27,21 +27,29 @@ const mockActionItems = [
 // TODO: Replace with API endpoint when available
 const mockRecurringTopics = ['Q3 Budget', 'Hiring', 'Product Launch', 'Mobile App'];
 
+const MOCK_UPCOMING = [
+  { id: 'u1', title: 'Weekly Product Sync', date: '2026-02-17T10:00:00Z', duration: 30, isRecurring: true, autoOpenEnabled: true },
+  { id: 'u2', title: 'Q1 Planning Review', date: '2026-02-17T14:00:00Z', duration: 60, isRecurring: false, autoOpenEnabled: false },
+  { id: 'u3', title: 'Engineering Standup', date: '2026-02-18T09:00:00Z', duration: 15, isRecurring: true, autoOpenEnabled: false },
+];
+
 export default function HomeView() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { meetingId, rtmsActive, rtmsLoading, startRTMS } = useMeeting();
   const [highlights, setHighlights] = useState([]);
   const [reminders, setReminders] = useState([]);
+  const [upcomingMeetings, setUpcomingMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionItems, setActionItems] = useState(mockActionItems);
 
   useEffect(() => {
     async function fetchHomeData() {
       try {
-        const [highlightsRes, remindersRes] = await Promise.allSettled([
+        const [highlightsRes, remindersRes, upcomingRes] = await Promise.allSettled([
           fetch('/api/home/highlights', { credentials: 'include' }),
           fetch('/api/home/reminders', { credentials: 'include' }),
+          fetch('/api/zoom-meetings', { credentials: 'include' }),
         ]);
 
         if (highlightsRes.status === 'fulfilled' && highlightsRes.value.ok) {
@@ -53,8 +61,15 @@ export default function HomeView() {
           const data = await remindersRes.value.json();
           setReminders(data.reminders || []);
         }
+
+        if (upcomingRes.status === 'fulfilled' && upcomingRes.value.ok) {
+          const data = await upcomingRes.value.json();
+          setUpcomingMeetings((data.meetings || []).slice(0, 3));
+        } else {
+          setUpcomingMeetings(MOCK_UPCOMING);
+        }
       } catch {
-        // Failed to fetch home data
+        setUpcomingMeetings(MOCK_UPCOMING);
       } finally {
         setLoading(false);
       }
@@ -67,6 +82,33 @@ export default function HomeView() {
     if (meetingId) {
       navigate(`/meeting/${encodeURIComponent(meetingId)}`);
     }
+  };
+
+  const toggleUpcomingAutoOpen = useCallback(async (meetingId) => {
+    const meeting = upcomingMeetings.find((m) => m.id === meetingId);
+    if (!meeting) return;
+    const wasEnabled = meeting.autoOpenEnabled;
+    setUpcomingMeetings((prev) =>
+      prev.map((m) => (m.id === meetingId ? { ...m, autoOpenEnabled: !m.autoOpenEnabled } : m))
+    );
+    try {
+      await fetch(`/api/zoom-meetings/${meetingId}/auto-open`, {
+        method: wasEnabled ? 'DELETE' : 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // keep optimistic state in mock mode
+    }
+  }, [upcomingMeetings]);
+
+  const formatUpcomingTime = (dateStr, duration) => {
+    const date = new Date(dateStr);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+    const monthDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const startTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const endDate = new Date(date.getTime() + duration * 60000);
+    const endTime = endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${dayName}, ${monthDay} · ${startTime} – ${endTime}`;
   };
 
   const toggleActionItem = (id) => {
@@ -118,6 +160,65 @@ export default function HomeView() {
           </div>
         </Card>
       )}
+
+      {/* Upcoming Meetings */}
+      <section className="home-section">
+        <div className="home-upcoming-header">
+          <h2 className="text-serif home-section-title">Upcoming meetings</h2>
+          <button
+            onClick={() => navigate('/upcoming')}
+            className="text-sans home-upcoming-view-all"
+          >
+            View all
+          </button>
+        </div>
+
+        {upcomingMeetings.length === 0 ? (
+          <Card>
+            <div className="home-upcoming-empty">
+              <Calendar size={24} className="text-muted" />
+              <p className="text-serif text-sm text-muted">No upcoming meetings</p>
+              <p className="text-sans text-xs text-muted">
+                Scheduled Zoom meetings will appear here
+              </p>
+            </div>
+          </Card>
+        ) : (
+          <div className="home-cards">
+            {upcomingMeetings.map((meeting) => (
+              <Card key={meeting.id} className="home-upcoming-card">
+                <div className="home-upcoming-card-inner">
+                  <div className="home-upcoming-card-content">
+                    <div className="home-upcoming-title-row">
+                      <p className="text-serif text-sm font-medium home-upcoming-title">
+                        {meeting.title}
+                      </p>
+                      {meeting.autoOpenEnabled && (
+                        <Badge className="home-upcoming-badge">Auto-open</Badge>
+                      )}
+                    </div>
+                    <p className="text-sans text-xs text-muted">
+                      {formatUpcomingTime(meeting.date, meeting.duration)}
+                    </p>
+                  </div>
+                  <div className="home-upcoming-toggle-col">
+                    <label className="settings-toggle">
+                      <input
+                        type="checkbox"
+                        checked={meeting.autoOpenEnabled}
+                        onChange={() => toggleUpcomingAutoOpen(meeting.id)}
+                      />
+                      <span className="settings-toggle-track" />
+                      <span className="settings-toggle-thumb" />
+                    </label>
+                    <span className="text-sans home-upcoming-toggle-label">Auto-open</span>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
 
       {!hasContent ? (
         <div className="home-empty">

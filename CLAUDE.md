@@ -115,22 +115,25 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
 - `routes/rtms.js` — RTMS webhook handlers
 - `routes/search.js` — Full-text search
 - `routes/highlights.js` — Meeting highlights/bookmarks
+- `routes/zoom-meetings.js` — Upcoming meetings + auto-open (Zoom `open_apps` API)
 - `services/auth.js` — Token management, PKCE, AES-128-CBC encryption
 - `services/openrouter.js` — LLM API client
 - `services/websocket.js` — WebSocket broadcast server
+- `services/zoomApi.js` — Authenticated Zoom REST API helper (token refresh, 401 retry)
 - `middleware/auth.js` — Session authentication middleware (`requireAuth`, `optionalAuth`)
 
 ### Frontend (`frontend/src/`)
 - `App.js` — HashRouter, route definitions, provider hierarchy (Auth → ZoomSdk → Meeting → Theme → Toast)
 - `index.css` — Design tokens, typography (Source Serif 4 + Inter), light/dark theme variables
-- `views/` — 10 view components:
+- `views/` — 11 view components:
   - `AuthView.js` — Login screen with "Connect with Zoom" CTA
-  - `HomeView.js` — Dashboard with weekly digest, action items, recurring topics, highlights, reminders
+  - `HomeView.js` — Dashboard with upcoming meetings, weekly digest, action items, recurring topics, highlights, reminders
   - `MeetingsListView.js` — Paginated meeting cards with live badge
   - `MeetingDetailView.js` — 5-tab view (Summary, Transcript, Participants, Tasks, Timeline) with inline title edit and delete
   - `InMeetingView.js` — 2-tab live view (Transcript, Arlo Assist) with 3-state transport controls (live/paused/stopped)
   - `SearchResultsView.js` — Full search page with query highlighting, empty/initial states
-  - `SettingsView.js` — Transcription preferences (toggles) + AI provider/model/API key configuration
+  - `SettingsView.js` — Transcription preferences (toggles) + AI provider/model/API key configuration + auto-open meeting list
+  - `UpcomingMeetingsView.js` — Upcoming Zoom meetings with per-meeting auto-open toggles (Zoom `open_apps` API)
   - `GuestNoMeetingView.js` — Feature cards (Mic, Sparkles, Search) + "Connect with Zoom" CTA
   - `GuestInMeetingView.js` — Live badge, summary/skeleton, faded transcript preview, CTA card
   - `NotFoundView.js` — 404 page
@@ -152,6 +155,8 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
   - `LiveTranscript.js` — Real-time transcript display with follow-live
   - `HighlightsPanel.js` — Meeting highlights/bookmarks
   - `DeleteMeetingDialog.js` — Confirmation dialog for meeting deletion
+  - `InfoBanner.js` — Blue dismissible info banner (used in upcoming meetings)
+  - `WarningBanner.js` — Amber dismissible warning banner (Zoom 3-app limit)
   - `ParticipantTimeline.js` — Swimlane timeline visualization with colored bars per participant
   - `TestPage.js` — Developer test page
 - `components/ui/` — UI primitives:
@@ -227,6 +232,11 @@ Tabs (AIPanel, MeetingDetailView, InMeetingView), ScrollArea (LiveTranscript, Me
 ### Highlights
 - Routes in `backend/src/routes/highlights.js`
 
+### Zoom Meetings (Upcoming + Auto-Open)
+- `GET /api/zoom-meetings` — List upcoming meetings from Zoom calendar (proxies `GET /v2/users/me/meetings?type=upcoming`)
+- `POST /api/zoom-meetings/:meetingId/auto-open` — Register auto-open via Zoom `open_apps` API
+- `DELETE /api/zoom-meetings/:meetingId/auto-open` — Remove auto-open registration
+
 ## WebSocket Protocol
 
 ```
@@ -244,6 +254,7 @@ Required in `.env` (copy from `.env.example`):
 ```bash
 ZOOM_CLIENT_ID=...              # From Zoom Marketplace
 ZOOM_CLIENT_SECRET=...
+ZOOM_APP_ID=...                 # Marketplace App ID (for open_apps API, different from Client ID)
 PUBLIC_URL=https://...          # ngrok HTTPS URL
 DATABASE_URL=postgresql://...   # Postgres connection string
 SESSION_SECRET=...              # 64 chars: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -280,9 +291,11 @@ DEFAULT_MODEL=google/gemini-2.0-flash-thinking-exp:free
 1. **Domain Allowlist** — Add `appssdk.zoom.us`
 2. **OAuth Redirect URL** — `https://{your-domain}/api/auth/callback`
 3. **RTMS Scopes** — Enable Transcripts (requires RTMS access approval from Zoom)
-4. **SDK Capabilities** — See `.claude/skills/zoom-apps/02-sdk-setup.md`
-5. **Home URL** — Your ngrok/production URL
-6. **Event Subscriptions** — `meeting.rtms_started`, `meeting.rtms_stopped`
+4. **Meeting Scopes** — `meeting:read` (upcoming meetings list), `meeting:write:open_app` (auto-open registration)
+5. **SDK Capabilities** — See `.claude/skills/zoom-apps/02-sdk-setup.md`
+6. **Home URL** — Your ngrok/production URL
+7. **Event Subscriptions** — `meeting.rtms_started`, `meeting.rtms_stopped`
+8. **App ID** — Copy from Marketplace app overview page → set as `ZOOM_APP_ID` in `.env` (different from Client ID)
 
 ## Security
 
@@ -299,8 +312,8 @@ arlo-meeting-assistant/
 │   ├── src/
 │   │   ├── server.js
 │   │   ├── config.js
-│   │   ├── routes/    # auth, meetings, ai, home, rtms, search, highlights
-│   │   ├── services/  # auth, openrouter, websocket
+│   │   ├── routes/    # auth, meetings, ai, home, rtms, search, highlights, zoom-meetings
+│   │   ├── services/  # auth, openrouter, websocket, zoomApi
 │   │   └── middleware/ # auth
 │   └── prisma/
 │       └── schema.prisma
@@ -311,10 +324,10 @@ arlo-meeting-assistant/
 │   └── src/
 │       ├── App.js         # HashRouter, routes, provider hierarchy
 │       ├── index.css      # Design tokens, typography, themes
-│       ├── views/         # 10 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, SearchResults, Settings, Guest×2, NotFound)
+│       ├── views/         # 11 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, SearchResults, Settings, Upcoming, Guest×2, NotFound)
 │       ├── contexts/      # 5 contexts (Auth, ZoomSdk, Meeting, Theme, Toast)
 │       ├── hooks/         # useZoomAuth (OAuth PKCE)
-│       ├── components/    # AppShell, ProtectedRoute, ErrorBoundary, LiveMeetingBanner, MeetingCard, OwlIcon, AIPanel, LiveTranscript, HighlightsPanel, DeleteMeetingDialog, ParticipantTimeline, TestPage
+│       ├── components/    # AppShell, ProtectedRoute, ErrorBoundary, LiveMeetingBanner, MeetingCard, OwlIcon, AIPanel, LiveTranscript, HighlightsPanel, DeleteMeetingDialog, ParticipantTimeline, InfoBanner, WarningBanner, TestPage
 │       └── components/ui/ # Button, Card, Badge, Input, Textarea, LoadingSpinner
 ├── rtms/              # RTMS transcript ingestion (npm workspace)
 │   └── src/index.js

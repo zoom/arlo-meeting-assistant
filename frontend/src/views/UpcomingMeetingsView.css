@@ -1,0 +1,134 @@
+.upcoming-view {
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: 80px;
+}
+
+.upcoming-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upcoming-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+}
+
+.upcoming-error {
+  text-align: center;
+  padding: 48px 16px;
+}
+
+.upcoming-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upcoming-card-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upcoming-card {
+  transition: background-color 0.15s;
+}
+
+.upcoming-card:hover {
+  background: color-mix(in srgb, var(--accent) 3%, var(--card));
+}
+
+.upcoming-card-inner {
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.upcoming-card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upcoming-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.upcoming-card-title {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.upcoming-auto-badge {
+  background: var(--accent) !important;
+  color: white !important;
+  font-size: 0.625rem;
+  padding: 2px 8px;
+}
+
+.upcoming-card-date {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+.upcoming-card-meta {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.upcoming-card-toggle-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.upcoming-toggle-label {
+  font-size: 0.625rem;
+  color: var(--muted-foreground);
+}
+
+/* Sticky bottom bar */
+.upcoming-bottom-bar {
+  position: sticky;
+  bottom: 0;
+  background: color-mix(in srgb, var(--background) 95%, transparent);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border);
+  padding: 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upcoming-enable-all {
+  font-size: 0.8125rem;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.upcoming-enable-all:hover {
+  text-decoration: underline;
+}
+
+.upcoming-count {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
