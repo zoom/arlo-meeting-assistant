@@ -22,6 +22,7 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 - [x] **Functional auto-start transcription** — The "Start transcription when you open this app" toggle in Settings is now functional. Preference is persisted to localStorage and the `/api/preferences` API (`autoStartRTMS` key). Auto-start logic lives in `MeetingContext` (provider level) so RTMS starts as soon as the user is authenticated and in a meeting, regardless of which view is active. User lands on HomeView with a `LiveMeetingBanner` linking to the live transcript. Defaults to ON for backward compatibility.
 - [x] **Upcoming meetings & auto-open** — Users can view their upcoming Zoom meetings inside Arlo and toggle auto-open so the app launches automatically when a meeting starts. Includes a reusable `services/zoomApi.js` helper (token auto-refresh, 401 retry), `routes/zoom-meetings.js` with GET/POST/DELETE endpoints for the Zoom `open_apps` API, a dedicated `UpcomingMeetingsView` with per-meeting auto-open toggles and info/warning banners, a top-3 upcoming section on the HomeView, and auto-open controls in SettingsView. Requires `meeting:read` and `meeting:write:open_app` OAuth scopes and the Zoom Apps Quick Launch setting.
 - [x] **Move dark mode toggle to Settings** — Dark mode toggle moved from the AppShell header to the SettingsView page header (Sun/Moon icon button right-aligned next to the title). Keeps the AppShell header clean with only search and settings icons.
+- [x] **Zoom App Manifest (beta)** — Added `zoom-app-manifest.json` with pre-configured OAuth scopes, all 16 SDK capabilities, event subscriptions (`meeting.rtms_started`/`meeting.rtms_stopped`), in-client OAuth, guest mode, and domain allow list. Developers in the manifest beta can upload this file to configure their Zoom App instead of setting each option manually.
 
 ---
 
@@ -31,11 +32,6 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 `intermediate` · `frontend/src/views/GuestInMeetingView.js`, `frontend/src/views/GuestNoMeetingView.js`
 
 The current guest views are minimal CTAs. `GuestInMeetingView` should display the meeting summary and a read-only transcript when available. `GuestNoMeetingView` should include a feature overview explaining what Arlo does, not just a login button.
-
-### Create Zoom app manifest
-`good-first-issue` · New file: `manifest.json`
-
-Create a `manifest.json` file for easier Zoom Marketplace installation. This file declares required scopes, event subscriptions, SDK capabilities, and URLs so that developers can import the app configuration instead of setting it up manually.
 
 ### Handle auto-started but not opened state
 `advanced` · `backend/src/routes/rtms.js`, `backend/src/middleware/auth.js`
