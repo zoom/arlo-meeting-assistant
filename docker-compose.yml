@@ -59,7 +59,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: sh -c "npx prisma db push --skip-generate && npm run dev"
+    command: sh -c "npx prisma db push && npm run dev"
 
   # Frontend (Zoom App)
   frontend:

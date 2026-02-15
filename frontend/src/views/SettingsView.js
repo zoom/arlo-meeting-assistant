@@ -45,7 +45,7 @@ const DEFAULT_EVENTS = {
 
 export default function SettingsView() {
   const [autoOpen, setAutoOpen] = useState(true);
-  const [autoStart, setAutoStart] = useState(false);
+  const [autoStart, setAutoStart] = useState(true);
   const [provider, setProvider] = useState('openrouter');
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -66,6 +66,7 @@ export default function SettingsView() {
   const [restartMessage, setRestartMessage] = useState(DEFAULT_MESSAGES.restart);
 
   const saveTimerRef = useRef(null);
+  const autoStartMountedRef = useRef(false);
 
   // Build chatNotices object from state
   const buildChatNotices = useCallback(() => ({
@@ -95,6 +96,10 @@ export default function SettingsView() {
         const notices = JSON.parse(cached);
         applyNoticesState(notices);
       }
+      const cachedAutoStart = localStorage.getItem('arlo-auto-start');
+      if (cachedAutoStart !== null) {
+        setAutoStart(JSON.parse(cachedAutoStart));
+      }
     } catch {}
 
     // Then fetch from API
@@ -104,6 +109,10 @@ export default function SettingsView() {
         if (prefs?.chatNotices) {
           applyNoticesState(prefs.chatNotices);
           localStorage.setItem('arlo-chat-notices', JSON.stringify(prefs.chatNotices));
+        }
+        if (prefs?.autoStartRTMS !== undefined) {
+          setAutoStart(prefs.autoStartRTMS);
+          localStorage.setItem('arlo-auto-start', JSON.stringify(prefs.autoStartRTMS));
         }
       })
       .catch(() => {});
@@ -146,6 +155,21 @@ export default function SettingsView() {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [buildChatNotices]);
+
+  // Save auto-start preference on change (skip initial mount)
+  useEffect(() => {
+    if (!autoStartMountedRef.current) {
+      autoStartMountedRef.current = true;
+      return;
+    }
+    localStorage.setItem('arlo-auto-start', JSON.stringify(autoStart));
+    fetch('/api/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ autoStartRTMS: autoStart }),
+    }).catch(() => {});
+  }, [autoStart]);
 
   const handleProviderChange = (newProvider) => {
     setProvider(newProvider);
@@ -202,10 +226,14 @@ export default function SettingsView() {
             <div className="settings-toggle-row">
               <div className="settings-toggle-text">
                 <label className="text-sans font-medium" htmlFor="auto-start">
-                  Auto-start transcription
+                  Start transcription when you open this app
                 </label>
                 <p className="text-sans text-sm text-muted">
-                  Begin capturing transcript as soon as you join
+                  Transcription begins as soon as you open Arlo in a meeting.
+                  If you&apos;re not the host, Arlo will request the host to allow transcription.
+                </p>
+                <p className="text-sans text-xs text-muted" style={{ marginTop: 4 }}>
+                  With auto-open enabled, transcription starts as soon as you join.
                 </p>
               </div>
               <label className="settings-toggle">

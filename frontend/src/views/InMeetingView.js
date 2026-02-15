@@ -60,15 +60,6 @@ export default function InMeetingView() {
     connectWebSocket(wsToken, meetingId);
   }, [isAuthenticated, ws, meetingId, wsToken, connectWebSocket]);
 
-  // Auto-start RTMS
-  const autoStartRef = useRef(false);
-  useEffect(() => {
-    if (autoStartRef.current || !isAuthenticated || !meetingId || rtmsActive || rtmsLoading) return;
-    autoStartRef.current = true;
-    const timer = setTimeout(() => startRTMS(true), 1500);
-    return () => clearTimeout(timer);
-  }, [isAuthenticated, meetingId, rtmsActive, rtmsLoading, startRTMS]);
-
   // Listen for transcript segments
   useEffect(() => {
     if (!ws) return;
