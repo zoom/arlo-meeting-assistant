@@ -11,7 +11,7 @@ import './AuthView.css';
 export default function AuthView() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading, login } = useAuth();
-  const { runningContext, meetingContext } = useZoomSdk();
+  const { isTestMode: isBrowser, runningContext, meetingContext } = useZoomSdk();
   const { authorize, isAuthorizing, error } = useZoomAuth();
 
   const getPostAuthDestination = useCallback(() => {
@@ -37,6 +37,11 @@ export default function AuthView() {
   }, [login, navigate]);
 
   const handleConnect = async () => {
+    if (isBrowser) {
+      // Outside Zoom — redirect to web OAuth flow
+      window.location.href = '/api/auth/start';
+      return;
+    }
     try {
       await authorize();
       // Navigation handled by the useEffect above after login sets isAuthenticated
