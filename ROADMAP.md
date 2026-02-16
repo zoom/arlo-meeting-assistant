@@ -99,28 +99,67 @@ The phrase following "Arlo" is sent to the LLM via a new `POST /api/ai/command` 
 
 | Category | Example commands | Execution |
 |---|---|---|
-| **App controls** | "Arlo, pause transcription" · "Arlo, resume" · "Arlo, stop recording" | Calls existing `pauseRTMS`/`resumeRTMS`/`stopRTMS` via MeetingContext |
+| **App controls** | "Arlo, pause transcription" · "Arlo, stop recording" | Calls existing `pauseRTMS`/`stopRTMS` via MeetingContext |
 | **Data mutations** | "Arlo, create an action item for this" · "Arlo, bookmark this moment" · "Arlo, rename this meeting to Q1 Planning" · "Arlo, generate a summary" | Calls existing API endpoints (`POST /api/highlights`, `PATCH /api/meetings/:id`, `POST /api/ai/summary`) |
-| **Chat actions** | "Arlo, send a summary to the chat" · "Arlo, share the action items" · "Arlo, invite everyone to use the app" | Uses existing chat notice system (`zoomSdk.sendAppInvitation` for invites, `zoomSdk.chatMessage` for content) |
-| **Queries** | "Arlo, what were the action items so far?" · "Arlo, summarize the last 10 minutes" | Sends query to AI with transcript context, response appears as an inline assistant message in the transcript |
+| **Chat actions** | "Arlo, send a summary to the chat" · "Arlo, share the action items" · "Arlo, invite everyone to use the app" | Uses existing chat notice system (`zoomSdk.sendMessageToChat` for content, `zoomSdk.sendAppInvitationToAllParticipants` for invites) |
+| **Queries** | "Arlo, what were the action items so far?" · "Arlo, summarize the last 10 minutes" | Sends query to AI with transcript context, response appears as an **Arlo response bubble** in the transcript |
 
 **UI feedback (inline transcript badge):**
-When a command is detected, an inline badge/chip appears in the transcript at the point where the command was spoken. The badge shows a state progression: `recognized → executing → done` (or `failed` with reason). This keeps a visible history of all commands issued during the meeting without interrupting the transcript flow.
+When a command is detected, an inline badge/chip appears in the transcript at the point where the command was spoken. The badge shows a state progression with 4 states: `recognized → executing → done` (or `failed` with reason). This keeps a visible history of all commands issued during the meeting without interrupting the transcript flow. **Destructive commands** (stop transcription, delete) show a confirmation variant with inline Confirm/Cancel buttons and a timeout before auto-dismissing.
+
+**Arlo response bubble (queries):**
+Query commands produce an **assistant-style response** inline in the transcript — visually distinct from speaker segments (different background, Arlo owl icon, no speaker attribution). This is a new transcript element type that does not currently exist and needs to be designed as a new component.
 
 **Chat responses (per-command):**
-Commands that naturally produce output for other participants (send summary, share action items, invite users) post a confirmation to the Zoom chat. Pure app-control commands (pause, resume) only show the inline badge — no chat noise.
+Commands that naturally produce output for other participants (send summary, share action items, invite users) post a confirmation to the Zoom chat. Pure app-control commands (pause, stop) only show the inline badge — no chat noise.
 
 **Settings:**
 - **Voice commands toggle** (on/off) in `SettingsView` under a new "Voice Commands" section. Defaults to OFF.
 - **Wake word toggle** — enable/disable always-on transcript scanning (independent of the FAB button, which is always available when voice mode is on).
+- **Privacy notice** explaining that transcript content is scanned for the wake word when enabled.
 
 **Speaker matching:**
 Only transcript segments attributed to the authenticated user's speaker name/ID are scanned for commands. This relies on the existing speaker identification from RTMS transcript data. Edge case: if speaker attribution is unavailable or ambiguous, fall back to processing all segments (with the confidence threshold providing a safety net).
 
 **Implementation scope:**
-- **Frontend:** Wake word scanner in `MeetingContext` (filters incoming WebSocket segments), FAB component in `InMeetingView`, inline command badge component, voice commands settings section, command execution dispatcher that calls existing context methods and API endpoints.
-- **Backend:** `POST /api/ai/command` endpoint — accepts a phrase, returns `{ intent, category, params, confidence }`. Uses a structured prompt with the command taxonomy for reliable classification.
+- **Frontend:** Wake word scanner in `MeetingContext` (filters incoming WebSocket segments), FAB component in `InMeetingView`, inline command badge component, Arlo response bubble component, voice commands settings section, command execution dispatcher that calls existing context methods and API endpoints.
+- **Backend:** `POST /api/ai/command` endpoint — accepts a phrase plus transcript context window, returns `{ intent, category, params, confidence }`. Uses a structured prompt with the command taxonomy for reliable classification. Separate rate limit from `ai/suggest` — short per-command cooldown (5 seconds) instead of per-meeting 5-minute window.
+- **SDK additions:** Add `sendAppInvitationToAllParticipants` to the capabilities config and manifest (not currently declared).
 - **No new database models** — commands are ephemeral (executed and shown inline). Could optionally log to `Highlight` model for persistence.
+
+**Known constraints and edge cases:**
+
+- **Pause paradox** — When RTMS is paused, no transcript segments arrive, so "Arlo, resume" cannot be heard. Resume must remain a manual button tap. The "resume" command is excluded from the supported command set. Similarly, voice commands only function while on `InMeetingView` (the WebSocket connects on mount).
+- **No app window control** — The Zoom Apps SDK has no method to close, minimize, or reopen the app window. Commands like "close the app" or "open the app" are not implementable — removed from scope.
+- **Speaker ID format mismatch** — RTMS transcript segments carry a participant ID (`user.userId` from RTMS events) while the authenticated user has a Zoom user ID (from OAuth JWT). These may use different ID formats. Implementation must verify ID parity or fall back to display name matching. If neither is reliable, consider a calibration step where the user says "Arlo, this is me" to link their speaker ID to their session.
+- **Wake word splitting across segments** — Zoom RTMS delivers transcript at variable granularity. "Arlo" may split across two consecutive segments from the same speaker (e.g., `"Arlo"` + `"pause the transcription"`). The scanner needs a segment buffer that joins consecutive same-speaker segments within a short time window (~2 seconds) before checking for the trigger phrase.
+- **Wake word transcription errors** — STT may transcribe "Arlo" as "Carlo", "Harlow", "R-Lo", etc., especially with accents. Consider fuzzy matching or a small set of phonetic variants, though this increases false positive risk.
+- **People named Arlo** — If a meeting participant is named Arlo, the owner addressing them ("Arlo, can you share your screen?") would trigger false detection. Speaker matching mitigates most cases but not when the owner talks to someone named Arlo. The confidence threshold is the safety net here.
+- **Context-dependent commands ("this")** — Commands like "create an action item for this" need surrounding transcript context. The AI endpoint should receive a configurable context window (default: last 60 seconds / 10 segments from the same meeting) alongside the command phrase so the LLM can extract the relevant content.
+- **AI classification latency** — Free OpenRouter models take 1–5 seconds for inference. The badge must show an immediate "Recognized" state the moment the wake word is detected (before the AI call), then transition to "Executing" after classification returns, then "Done"/"Failed" after execution. Design must account for this multi-second gap.
+- **Rapid sequential commands** — Multiple commands in quick succession ("Arlo, bookmark this. Arlo, create an action item.") or within the same segment need a serial command queue. The UI must handle multiple badges stacking in the transcript.
+- **Historical segment replay** — When `InMeetingView` mounts, historical segments are loaded from the API. The wake word scanner must only process new real-time WebSocket segments, not replayed history, to avoid re-triggering old commands.
+- **Segment accumulation lift** — Currently segments only accumulate in `InMeetingView` local state. For voice commands to work across tabs (Transcript vs Arlo Assist), segment processing must be lifted into `MeetingContext` at the provider level.
+
+**FAB design states:**
+
+| State | Visual | When |
+|---|---|---|
+| Hidden | Not rendered | Voice mode OFF in settings |
+| Idle | Subtle mic icon, muted color | Voice mode ON, passively listening via wake word |
+| Listening | Animated ring/glow on FAB | FAB tapped, actively listening for next phrase |
+| Processing | Spinner replaces mic icon | AI classifying the detected command |
+| Cooldown | Briefly disabled/dimmed | Just executed, 5-second cooldown |
+
+**Inline command badge states:**
+
+| State | Visual | Notes |
+|---|---|---|
+| Recognized | Light accent chip, command text | Immediate on wake word detection |
+| Executing | Spinner + "Creating action item..." | After AI classification returns |
+| Done | Green check + result text | Successful execution |
+| Failed | Red x + error reason | Execution error |
+| Confirm (destructive) | Chip with Confirm/Cancel buttons | Stop, delete — auto-dismiss after timeout |
 
 ### Specialized UI modes
 `advanced` · Frontend views, AI prompt engineering, new export formats
