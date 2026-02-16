@@ -110,6 +110,30 @@ export default function InMeetingView() {
       .catch(() => {});
   }, [rtmsActive, meetingId]);
 
+  // Load existing participant events from DB (for mid-meeting app opens)
+  const historicalEventsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!rtmsActive || !meetingId || historicalEventsLoadedRef.current) return;
+    historicalEventsLoadedRef.current = true;
+
+    fetch(`/api/meetings/by-zoom-id/${encodeURIComponent(meetingId)}/participant-events`, {
+      credentials: 'include',
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.events?.length > 0) {
+          setParticipantEvents(prev => {
+            // Merge: DB events first, then any WS events not already present
+            const dbIds = new Set(data.events.map(e => e.id));
+            const newFromWs = prev.filter(e => !dbIds.has(e.id));
+            return [...data.events, ...newFromWs];
+          });
+          console.log(`Loaded ${data.events.length} historical participant events from DB`);
+        }
+      })
+      .catch(() => {});
+  }, [rtmsActive, meetingId]);
+
   // Listen for transcript segments
   useEffect(() => {
     if (!ws) return;
@@ -187,8 +211,8 @@ export default function InMeetingView() {
     stopRTMS();
   };
 
-  // Determine transcript state
-  const hasContent = segments.length > 0 || participantEvents.length > 0;
+  // Determine transcript state (initial_roster events don't count as displayable content)
+  const hasContent = segments.length > 0 || participantEvents.some(e => e.eventType !== 'initial_roster');
   const transcriptState = rtmsPaused
     ? 'paused'
     : rtmsActive && hasContent
@@ -198,14 +222,17 @@ export default function InMeetingView() {
         : 'not-started';
 
   // Merge transcript segments and participant events into a chronological timeline
+  // Filter out initial_roster events — they're not real joins, just the SDK reporting existing participants
   const timelineItems = useMemo(() => {
     const items = [];
     segments.forEach((seg, i) => {
       items.push({ type: 'transcript', ...seg, _ts: seg.tStartMs, _key: `seg-${i}` });
     });
-    participantEvents.forEach((evt, i) => {
-      items.push({ type: 'participant-event', ...evt, _ts: evt.timestamp, _key: `evt-${i}` });
-    });
+    participantEvents
+      .filter(evt => evt.eventType !== 'initial_roster')
+      .forEach((evt, i) => {
+        items.push({ type: 'participant-event', ...evt, _ts: evt.timestamp, _key: `evt-${i}` });
+      });
     items.sort((a, b) => a._ts - b._ts);
     return items;
   }, [segments, participantEvents]);

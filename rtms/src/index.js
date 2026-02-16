@@ -91,9 +91,15 @@ async function handleRTMSStarted(payload) {
         console.log(`  Timestamp: ${timestamp}`);
         console.log(`  User:`, user);
 
+        // Mark first transcript received — boundary between initial roster and real joins
+        const session = activeSessions.get(meeting_uuid);
+        if (session && !session.firstTranscriptReceived) {
+          session.firstTranscriptReceived = true;
+          console.log('First transcript received — subsequent joins are real joins');
+        }
+
         // Record participant name from transcript for leave event lookup
         if (user?.userId && user?.userName) {
-          const session = activeSessions.get(meeting_uuid);
           if (session) session.participantNames.set(String(user.userId), user.userName);
         }
 
@@ -151,25 +157,24 @@ async function handleRTMSStarted(payload) {
         });
       }
 
-      // Suppress initial roster join events that fire when RTMS first connects.
-      // The SDK reports all existing participants as "join" on connect — not real joins.
-      if (isJoin && session) {
-        const elapsed = Date.now() - session.startTime.getTime();
-        if (elapsed < 5000) {
-          console.log('Suppressing initial roster join events (RTMS just connected)');
-          return;
-        }
-      }
-
-      // Forward participant events to backend for broadcast + storage
+      // Classify join events: before first transcript = initial roster, after = real join.
+      // The RTMS SDK always reports existing participants as "join" before transcript data flows.
       const events = (participants || []).map(p => {
         const pid = p.participantId ? String(p.participantId) : (p.userId ? String(p.userId) : null);
         // Look up display name: prefer SDK-provided name, fall back to stored name
         const name = p.userName || p.name || session?.participantNames.get(pid) || `Participant ${pid || 'unknown'}`;
+
+        let eventType;
+        if (isJoin) {
+          eventType = (session && !session.firstTranscriptReceived) ? 'initial_roster' : 'joined';
+        } else if (event === 'leave' || event === 'user_leave') {
+          eventType = 'left';
+        } else {
+          eventType = event;
+        }
+
         return {
-          eventType: isJoin ? 'joined'
-            : (event === 'leave' || event === 'user_leave') ? 'left'
-            : event,
+          eventType,
           participantName: name,
           participantId: pid,
           timestamp: Date.now(),
@@ -187,6 +192,7 @@ async function handleRTMSStarted(payload) {
     activeSessions.set(meeting_uuid, {
       client,
       stopping: false,
+      firstTranscriptReceived: false, // Set true on first transcript — used to classify initial roster vs real joins
       participantNames: new Map(), // userId → displayName lookup
       streamId: rtms_stream_id,
       startTime: new Date(),

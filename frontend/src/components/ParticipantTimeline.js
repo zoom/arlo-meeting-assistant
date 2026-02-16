@@ -12,18 +12,25 @@ function formatTimestamp(ms) {
 }
 
 /**
- * Build the "Meeting started with..." message from the earliest join events.
- * Groups participants who joined within the first 60 seconds of the meeting.
+ * Build the "Meeting started with..." message from initial roster events.
+ * Prefers `initial_roster` events (new RTMS classification).
+ * Falls back to legacy 60s-grouping of `joined` events for old meeting data.
  */
 function buildInitialParticipants(events) {
   if (!events || events.length === 0) return null;
 
-  const joinEvents = events.filter(e => e.eventType === 'joined');
-  if (joinEvents.length === 0) return null;
+  // Prefer initial_roster events (reliable, set by RTMS before first transcript)
+  let initial = events.filter(e => e.eventType === 'initial_roster');
 
-  const firstTimestamp = joinEvents[0].timestamp;
-  const threshold = 60000; // 60 seconds
-  const initial = joinEvents.filter(e => e.timestamp - firstTimestamp <= threshold);
+  // Legacy fallback: group joined events within first 60s for old meetings
+  if (initial.length === 0) {
+    const joinEvents = events.filter(e => e.eventType === 'joined');
+    if (joinEvents.length === 0) return null;
+
+    const firstTimestamp = joinEvents[0].timestamp;
+    const threshold = 60000;
+    initial = joinEvents.filter(e => e.timestamp - firstTimestamp <= threshold);
+  }
 
   if (initial.length === 0) return null;
 
@@ -38,7 +45,7 @@ function buildInitialParticipants(events) {
   return {
     type: 'meeting-started',
     text,
-    timestamp: firstTimestamp,
+    timestamp: initial[0].timestamp,
     participantIds: initial.map(e => e.participantId),
   };
 }
@@ -72,9 +79,12 @@ function buildTimeline(segments, events) {
     });
   });
 
-  // Add participant events (skip initial joins that are grouped)
+  // Add participant events (skip initial_roster and legacy-grouped initial joins)
   (events || []).forEach(evt => {
-    // Skip join events that are part of the initial "Meeting started with..." group
+    // Skip initial_roster events — they're represented by the "Meeting started with..." message
+    if (evt.eventType === 'initial_roster') return;
+
+    // Legacy: skip joined events that are part of the initial group (old data without initial_roster)
     if (
       evt.eventType === 'joined' &&
       initialParticipantIds.has(evt.participantId) &&

@@ -157,6 +157,43 @@ router.get('/by-zoom-id/:zoomMeetingId/transcript', optionalAuth, async (req, re
 });
 
 /**
+ * GET /api/meetings/by-zoom-id/:zoomMeetingId/participant-events
+ * Get participant events by Zoom meeting UUID (for InMeetingView before DB ID is known)
+ */
+router.get('/by-zoom-id/:zoomMeetingId/participant-events', optionalAuth, async (req, res) => {
+  try {
+    const { zoomMeetingId } = req.params;
+
+    const meeting = await prisma.meeting.findFirst({
+      where: { zoomMeetingId },
+      orderBy: { startTime: 'desc' },
+    });
+
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+
+    const events = await prisma.participantEvent.findMany({
+      where: { meetingId: meeting.id },
+      orderBy: { timestamp: 'asc' },
+    });
+
+    const serializedEvents = events.map(e => ({
+      id: e.id,
+      eventType: e.eventType,
+      participantName: e.participantName,
+      participantId: e.participantId,
+      timestamp: Number(e.timestamp),
+    }));
+
+    res.json({ events: serializedEvents });
+  } catch (error) {
+    console.error('Get participant events by zoom ID error:', error);
+    res.status(500).json({ error: 'Failed to fetch participant events' });
+  }
+});
+
+/**
  * GET /api/meetings/:id
  * Get meeting details
  */
