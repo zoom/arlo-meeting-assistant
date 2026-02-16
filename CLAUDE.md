@@ -59,7 +59,7 @@ ngrok http 3000 --domain=yourname-arlo.ngrok-free.app  # Static domain (recommen
 
 ## Architecture
 
-### Two-Component System (Currently Implemented)
+### System Components
 
 1. **In-Meeting Zoom App** (`frontend/`) — React 18 + Base UI + Zoom Apps SDK
    - Runs embedded in Zoom client during meetings
@@ -103,71 +103,23 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
 
 **User info fallback:** If `user:read` OAuth scope is not configured, backend decodes JWT access token payload for user ID and name.
 
-## Key Files
+## Key Files & Architecture Details
 
 ### Backend (`backend/src/`)
 - `server.js` — Express app setup, middleware, route mounting
 - `config.js` — Environment variable validation
-- `routes/auth.js` — OAuth routes: in-client PKCE (authorize, callback, me) + web OAuth redirect flow (start, callback GET)
-- `routes/meetings.js` — Meeting CRUD, transcript endpoints, AI title generation, participant events
-- `routes/ai.js` — AI chat, suggestions, and summary (OpenRouter)
-- `routes/home.js` — Home dashboard highlights and reminders (`optionalAuth`)
-- `routes/rtms.js` — RTMS webhook handlers
-- `routes/search.js` — Full-text search
-- `routes/highlights.js` — Meeting highlights/bookmarks
-- `routes/zoom-meetings.js` — Upcoming meetings + auto-open (Zoom `open_apps` API)
-- `routes/preferences.js` — User preferences CRUD (chat notices, auto-start, AI config)
-- `services/auth.js` — Token management, PKCE, AES-128-CBC encryption
-- `services/openrouter.js` — LLM API client
-- `services/websocket.js` — WebSocket broadcast server
-- `services/zoomApi.js` — Authenticated Zoom REST API helper (token refresh, 401 retry)
-- `middleware/auth.js` — Session authentication middleware (`requireAuth`, `optionalAuth`)
+- `routes/` — 9 route modules: auth, meetings, ai, home, rtms, search, highlights, zoom-meetings, preferences
+- `services/` — auth (token/PKCE/encryption), openrouter (LLM), websocket (broadcast), zoomApi (Zoom REST helper with token refresh)
+- `middleware/auth.js` — `requireAuth` and `optionalAuth` session middleware
 
 ### Frontend (`frontend/src/`)
-- `App.js` — HashRouter, route definitions, provider hierarchy (Theme → ZoomSdk → Auth → Meeting → Toast)
+- `App.js` — HashRouter, route definitions, provider hierarchy: Theme → ZoomSdk → Auth → Meeting → Toast
 - `index.css` — Design tokens, typography (Source Serif 4 + Inter), light/dark theme variables
-- `views/` — 14 view components:
-  - `AuthView.js` — In-client Zoom OAuth PKCE login screen with "Connect with Zoom" CTA
-  - `HomeView.js` — Dashboard with upcoming meetings, weekly digest, action items, recurring topics, highlights, reminders
-  - `MeetingsListView.js` — Paginated meeting cards with live badge
-  - `MeetingDetailView.js` — 5-tab view (Summary, Transcript, Participants, Tasks, Timeline) with inline title edit, AI title generation, and delete
-  - `InMeetingView.js` — 2-tab live view (Transcript, Arlo Assist) with 3-state transport controls (live/paused/stopped), inline participant events
-  - `SearchResultsView.js` — Full search page with query highlighting, empty/initial states, multi-source results (titles, summaries, transcripts)
-  - `SettingsView.js` — Transcription preferences (toggles) + AI provider/model/API key configuration + chat notice templates + auto-open meeting list
-  - `UpcomingMeetingsView.js` — Upcoming Zoom meetings with per-meeting auto-open toggles (Zoom `open_apps` API)
-  - `GuestNoMeetingView.js` — Feature cards (Mic, Sparkles, Search) + "Connect with Zoom" CTA
-  - `GuestInMeetingView.js` — Live badge, summary/skeleton, faded transcript preview, CTA card
-  - `LandingPageView.js` — Browser marketing page with feature cards, onboarding steps, FAQ, "Install from Marketplace" CTA
-  - `OnboardingView.js` — Post-Marketplace OAuth success page with next steps
-  - `OAuthErrorView.js` — OAuth error page with retry option and diagnostics
-  - `NotFoundView.js` — 404 page
-- `contexts/` — 5 context providers:
-  - `AuthContext.js` — Auth state, session restoration, login/logout
-  - `ZoomSdkContext.js` — Zoom SDK initialization and meeting context
-  - `MeetingContext.js` — Active meeting state, WebSocket connection
-  - `ThemeContext.js` — Light/dark theme with OS detection and localStorage persistence
-  - `ToastContext.js` — Toast notification system
+- `views/` — 14 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, SearchResults, Settings, Upcoming, GuestNoMeeting, GuestInMeeting, LandingPage, Onboarding, OAuthError, NotFound)
+- `contexts/` — AuthContext (session), ZoomSdkContext (SDK init), MeetingContext (active meeting + WS), ThemeContext (light/dark), ToastContext
 - `hooks/useZoomAuth.js` — In-client OAuth PKCE flow hook
-- `components/` — Shared components:
-  - `AppShell.js` — Persistent header (back, logo, search, theme toggle, settings) + `<Outlet />`. Enter in search navigates to `/search?q=...`
-  - `ProtectedRoute.js` — Auth guard wrapper
-  - `ErrorBoundary.js` — React error boundary
-  - `LiveMeetingBanner.js` — "Return to live transcript" sticky banner
-  - `MeetingCard.js` — Reusable meeting card with live badge
-  - `OwlIcon.js` — Custom SVG branding icon
-  - `AIPanel.js` — AI summary/actions/chat tabs
-  - `LiveTranscript.js` — Real-time transcript display with follow-live
-  - `HighlightsPanel.js` — Meeting highlights/bookmarks
-  - `DeleteMeetingDialog.js` — Confirmation dialog for meeting deletion
-  - `InfoBanner.js` — Blue dismissible info banner (used in upcoming meetings)
-  - `WarningBanner.js` — Amber dismissible warning banner (Zoom 3-app limit)
-  - `ParticipantTimeline.js` — Swimlane timeline visualization with colored bars per participant
-  - `TestPage.js` — Developer test page
-- `components/ui/` — UI primitives:
-  - `Button.js`, `Card.js`, `Badge.js`, `Input.js`, `Textarea.js`, `LoadingSpinner.js`
-
-### RTMS (`rtms/src/`)
-- `index.js` — RTMS client using @zoom/rtms v1.0 class-based API
+- `components/AppShell.js` — Persistent header (back, logo, search, theme toggle, settings) + `<Outlet />`
+- `components/ui/` — Unstyled primitives: Button, Card, Badge, Input, Textarea, LoadingSpinner
 
 ### Database
 - `backend/prisma/schema.prisma` — PostgreSQL schema
@@ -175,6 +127,20 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
 - `TranscriptSegment.seqNo` is UNIQUE per meeting (idempotency)
 - Full-text search uses Postgres GIN index on `text` column
 - All queries filtered by `ownerId` (row-level data isolation)
+
+### Monorepo (npm workspaces)
+
+The root `package.json` defines 3 workspaces: `backend`, `frontend`, `rtms`. Install dependencies into a specific workspace:
+
+```bash
+npm install <package> -w backend      # Add to backend
+npm install <package> -w frontend     # Add to frontend
+npm install <package> -w rtms         # Add to rtms
+```
+
+### Docker Startup Behavior
+
+Docker Compose runs `npx prisma db push` (not migrations) on backend startup to sync the schema. This means schema changes via `schema.prisma` are applied automatically when rebuilding containers — no migration files needed for development. Use `docker-compose up --build -V` when npm dependencies change (recreates volumes).
 
 ## Frontend UI (Base UI)
 
@@ -318,44 +284,6 @@ DEFAULT_MODEL=google/gemini-2.0-flash-thinking-exp:free
 - httpOnly session cookies, never expose tokens to frontend
 - All API calls from frontend use `fetch` with `credentials: 'include'`
 - HTTP headers required by Zoom Apps: `Strict-Transport-Security`, `X-Content-Type-Options`, `Content-Security-Policy`, `Referrer-Policy`
-
-## Project Structure
-
-```
-arlo-meeting-assistant/
-├── backend/           # Express API (npm workspace)
-│   ├── src/
-│   │   ├── server.js
-│   │   ├── config.js
-│   │   ├── routes/    # auth, meetings, ai, home, rtms, search, highlights, zoom-meetings, preferences
-│   │   ├── services/  # auth, openrouter, websocket, zoomApi
-│   │   └── middleware/ # auth
-│   └── prisma/
-│       └── schema.prisma
-├── frontend/          # React Zoom App (npm workspace, CRA)
-│   ├── public/
-│   │   ├── index.html # Loads Zoom Apps SDK script
-│   │   └── fonts/     # Self-hosted Source Serif 4 + Inter WOFF2
-│   └── src/
-│       ├── App.js         # HashRouter, routes, provider hierarchy
-│       ├── index.css      # Design tokens, typography, themes
-│       ├── views/         # 14 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, SearchResults, Settings, Upcoming, Guest×2, LandingPage, Onboarding, OAuthError, NotFound)
-│       ├── contexts/      # 5 contexts (Auth, ZoomSdk, Meeting, Theme, Toast)
-│       ├── hooks/         # useZoomAuth (OAuth PKCE)
-│       ├── components/    # AppShell, ProtectedRoute, ErrorBoundary, LiveMeetingBanner, MeetingCard, OwlIcon, AIPanel, LiveTranscript, HighlightsPanel, DeleteMeetingDialog, ParticipantTimeline, InfoBanner, WarningBanner, TestPage
-│       └── components/ui/ # Button, Card, Badge, Input, Textarea, LoadingSpinner
-├── rtms/              # RTMS transcript ingestion (npm workspace)
-│   └── src/index.js
-├── docs/              # Project documentation
-│   ├── ARCHITECTURE.md
-│   ├── PROJECT_STATUS.md
-│   └── TROUBLESHOOTING.md
-├── .claude/skills/zoom-apps/  # Reusable Zoom Apps development guides (8 docs)
-├── docker-compose.yml
-├── zoom-app-manifest.json  # Zoom App Manifest (beta) — pre-configured scopes, SDK APIs, events
-├── .env.example
-└── package.json       # Root workspace config
-```
 
 ## Documentation Reference
 
