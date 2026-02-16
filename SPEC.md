@@ -58,7 +58,10 @@ Persistent header across all authenticated views:
 Back-arrow drill-down. No persistent tab bar or sidebar. The navigation hierarchy:
 
 ```
-/ (Auth — unauthenticated root)
+/ (Root — landing page in browser, redirect to /auth in Zoom)
+├── /auth (In-client Zoom OAuth PKCE)
+├── /welcome (Post-Marketplace OAuth success/onboarding)
+├── /auth-error (OAuth error with retry)
 ├── /guest (Guest — no meeting context)
 ├── /guest/{currentMeetingUUID} (Guest — in meeting)
 ├── /home (Home — authenticated root)
@@ -86,14 +89,19 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 
 ## Routes & View Specifications
 
-### Route: `/` — Logged-Out / Authorization
+### Route: `/` — Root
 
-**Access:** Unauthenticated only. Redirect authenticated users to `/home`.
+**Access:** Context-dependent. `RootView` detects the running environment:
+- **Inside Zoom client:** Redirect to `/auth` (in-client PKCE flow).
+- **Browser + authenticated:** Redirect to `/home`.
+- **Browser + unauthenticated:** Render `LandingPageView` (marketing landing page).
 
-**Rendering:**
-- Arlo owl icon and app name, centered.
-- One or two lines of value proposition copy.
-- Single CTA button: **"Connect with Zoom"** → initiates Zoom OAuth flow.
+**LandingPageView rendering (browser only):**
+- Hero section with Owl icon (64px), heading, and value proposition copy.
+- 6 feature cards: Live Transcription, AI Summaries, Searchable History, Instant Access, Secure & Private, Team Ready.
+- 3-step onboarding guide: Install → Start Meeting → Get AI Insights.
+- FAQ section with collapsible answers.
+- CTA button: **"Install from Zoom Marketplace"** → links to `GET /api/auth/start` (web OAuth redirect).
 - No header, no navigation. Standalone landing page.
 
 **Implementation notes:**
@@ -110,6 +118,37 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 - **User info fallback:** If the `user:read` OAuth scope is not configured, the backend falls back to decoding the JWT access token payload to extract user ID and name.
 - **Token encryption:** Access tokens are stored AES-128-CBC encrypted in Postgres (the `REDIS_ENCRYPTION_KEY` env var provides a 16-byte hex key).
 - On successful OAuth callback, redirect to `/home`.
+
+**Web OAuth redirect flow (browser/Marketplace install):**
+- `GET /api/auth/start` redirects to `https://zoom.us/oauth/authorize` with `client_id`, `redirect_uri`, and CSRF `state`.
+- Zoom redirects back to `GET /api/auth/callback` with `code` and `state`.
+- Backend exchanges code for tokens using `client_secret` (no PKCE — server-side flow).
+- On success: creates/upserts user, sets session cookie, redirects to `/#/welcome`.
+- On error: redirects to `/#/auth-error?error=...&message=...`.
+
+---
+
+### Route: `/welcome` — Post-Install Onboarding
+
+**Access:** Authenticated (redirected here after successful Marketplace OAuth install).
+
+**Rendering:**
+- **Loading state:** Spinner + "Connecting to Zoom..." (while `AuthContext` restores session).
+- **Success state:** Welcome heading, user name greeting, "Next Steps" instructions (static).
+- **Session expired fallback:** "Go to Home" button.
+
+**Implementation notes:** Future enhancement — fetch upcoming meetings via `GET /api/zoom-meetings` and display auto-open toggles to make the post-install experience more actionable.
+
+---
+
+### Route: `/auth-error` — OAuth Error
+
+**Access:** Unauthenticated (redirected here on OAuth failure).
+
+**Rendering:**
+- Error message from `?error=...&message=...` query params.
+- "Try again" button → `GET /api/auth/start`.
+- Diagnostic information for debugging.
 
 ---
 
@@ -208,6 +247,8 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 - Results as clickable Card components: meeting title (serif), matched transcript text with `<mark>` highlighting, speaker/timestamp/date metadata. Click navigates to `/meetings/[meetingID]`.
 - **Empty state (no results):** OwlIcon + "No results found" + help text.
 - **Initial state (no query):** Search icon + "Search across all your meetings".
+- **Multi-source search:** Queries meeting titles, AI summaries (JSONB fields), and transcripts in parallel. Results are prioritized by source (titles first, summaries second, transcripts third) with section labels and type badges when multiple categories match.
+- **AppShell search dropdown:** Typing in the header search shows a dropdown with up to 5 results and type badges. Pressing Enter navigates to the full `/search` route.
 - Data: calls `GET /api/search?q=...` endpoint.
 
 ---
@@ -223,6 +264,7 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 - Click title: Switch to edit mode — Input field (serif font, text-2xl, auto-focused, text selected), Check button, X button.
 - Enter key: Save via `PATCH /api/meetings/:id` with `{ title }`. Escape key: Cancel.
 - Save shows Loader2 spinner on check button during API call.
+- **AI title generation:** Sparkle icon button next to the title calls `POST /api/meetings/:id/generate-title` to generate a concise, descriptive title from the transcript/summary. Generated title pre-fills the inline editor for review before saving.
 
 **Delete Meeting:**
 - Trash2 icon button in the export row (destructive outline variant).
@@ -254,12 +296,15 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 - **Source** is a timestamp that, when clicked, switches to the Transcript tab and scrolls to that timestamp.
 
 #### Tab 5: Timeline
-- Participant timeline visualization showing when each speaker was active.
-- **No data state:** Card with "Timeline data will be available in a future update."
-- **With data:** Time axis (15-minute tick marks) and participant swimlanes.
+- Participant timeline visualization showing when each participant joined and left the meeting.
+- **Data source:** `ParticipantEvent` model in database — tracks `joined`/`left` events with millisecond timestamps. Events are recorded by the RTMS service during transcript ingestion.
+- **Initial roster filtering:** Zoom fires a batch of `participant_joined` events when RTMS connects. These are distinguished from real joins using a `firstTranscriptReceived` flag — events before the first transcript segment are classified as initial roster (not displayed as join events).
+- **Rendering:** `ParticipantTimeline` component with:
+  - Time axis (15-minute tick marks) and participant swimlanes.
   - Participant name (left, fixed 128px width, right-aligned, sans) + horizontal bar (width = duration/meetingDuration %, muted color, rounded).
   - 5 muted colors cycling: blue, purple, green, orange, pink (light/dark mode variants).
   - Hover: show duration text inside bar (opacity transition).
+- **No data state:** Card with "No participant events recorded" message.
 
 **Export (below tabs or in the header area):**
 - Two buttons: **"Export VTT"** and **"Export MD"**.
@@ -278,12 +323,14 @@ When the user is in an active meeting (determined by Zoom Apps SDK meeting conte
 
 #### Tab 1: Transcript
 - Live-scrolling transcript with speaker labels and timestamps.
+- **Inline participant events:** Join/leave events and transcription lifecycle changes (started, paused, resumed) are displayed inline in the transcript flow as muted system messages.
 - **Transport controls card** (above transcript) with 3 states:
   - **Live (recording):** Pulsing red dot + "Transcribing" label, Pause button (outline), Stop button (destructive outline).
   - **Paused:** Orange "Paused" badge, Resume button (accent, Play icon), Stop button (destructive outline). "Transcript paused" floating pill above transcript.
   - **Stopped/not-started:** Start transcription prompt.
 - **Follow-live mode:** On by default. Scrolling up detaches. **"Scroll to live" button** anchored at the bottom of the transcript area to re-attach.
 - **Suggestion bubbles:** Real-time LLM-generated nudges (e.g., "Summarize the last 5 minutes," "This sounds like a commitment — capture it?"). Render as small dismissible chips/bubbles overlaid at the bottom of the transcript area, above the "Scroll to live" button. Informational only — no action on tap beyond dismiss (X button). New suggestions push older ones out or stack with a limit (e.g., max 2–3 visible).
+- **Chat notices:** When transcription state changes (start, pause, resume, stop, restart), Arlo sends an automatic message to the Zoom meeting chat notifying participants. Each event type has an independent toggle and customizable message template with `[meeting-id]` placeholder support. Configured in Settings.
 
 #### Tab 2: Arlo Assist
 - **Notes:** LLM-generated draft meeting notes, displayed as markdown-formatted bullets. User-editable (contenteditable or textarea).
@@ -334,6 +381,18 @@ Before transcript data is flowing, the In-Meeting view replaces the tabbed conte
 - **"Test Connection"** — outline button with status feedback (idle/testing/success/error states using CheckCircle2/XCircle icons)
 
 State is local for now (no backend persistence) — API integration planned.
+
+**Chat Notices section:** Heading + Card containing:
+- **Master toggle:** "Send chat notices" — enables/disables all chat notifications.
+- **Per-event toggles** (progressive disclosure — visible when master is on):
+  - Transcription started
+  - Transcription paused
+  - Transcription resumed
+  - Transcription stopped
+  - Transcription restarted
+- **Editable message templates:** Each event has a customizable message with `[meeting-id]` placeholder support.
+- **Live preview:** Shows the formatted message that will be sent to Zoom chat.
+- Preferences persisted via `PUT /api/preferences` (server-side `User.preferences` JSON) and localStorage for zero-latency access during meetings.
 
 ---
 
@@ -393,18 +452,27 @@ These components are used across multiple views and should be implemented as reu
 
 ```
 On app load:
-├── Is user authenticated?
-│   ├── NO → Is there an active meeting with Arlo data?
-│   │   ├── YES → /guest/{currentMeetingUUID}
-│   │   └── NO  → /guest (or / for first-time auth)
-│   └── YES → Is the app inside an active meeting?
-│       ├── YES → /meeting/{currentMeetingUUID}
-│       │   └── Is transcript data flowing?
-│       │       ├── YES → Render live transcript tabs
-│       │       └── NO  → Is user the host?
-│       │           ├── YES → "Start Transcription" prompt
-│       │           └── NO  → "Request Access" / "Waiting" state
-│       └── NO  → /home
+├── Is app running inside Zoom client?
+│   ├── YES (in-client):
+│   │   ├── Is user authenticated?
+│   │   │   ├── NO → /auth (in-client PKCE flow)
+│   │   │   └── YES → Is the app inside an active meeting?
+│   │   │       ├── YES → /meeting/{currentMeetingUUID}
+│   │   │       │   └── Is transcript data flowing?
+│   │   │       │       ├── YES → Render live transcript tabs
+│   │   │       │       └── NO  → Is user the host?
+│   │   │       │           ├── YES → "Start Transcription" prompt
+│   │   │       │           └── NO  → "Request Access" / "Waiting" state
+│   │   │       └── NO  → /home
+│   │   └── Guest mode:
+│   │       ├── In meeting with Arlo data? → /guest/{currentMeetingUUID}
+│   │       └── No meeting context → /guest
+│   └── NO (browser):
+│       ├── Authenticated? → /home
+│       └── Not authenticated → / (LandingPageView)
+│           ├── "Install from Marketplace" → GET /api/auth/start → Zoom OAuth
+│           ├── Success → /welcome (OnboardingView)
+│           └── Error → /auth-error (OAuthErrorView)
 ```
 
 Key client-side state to track:

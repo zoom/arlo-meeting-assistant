@@ -23,6 +23,10 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 - [x] **Upcoming meetings & auto-open** — Users can view their upcoming Zoom meetings inside Arlo and toggle auto-open so the app launches automatically when a meeting starts. Includes a reusable `services/zoomApi.js` helper (token auto-refresh, 401 retry), `routes/zoom-meetings.js` with GET/POST/DELETE endpoints for the Zoom `open_apps` API, a dedicated `UpcomingMeetingsView` with per-meeting auto-open toggles and info/warning banners, a top-3 upcoming section on the HomeView, and auto-open controls in SettingsView. Requires `meeting:read` and `meeting:write:open_app` OAuth scopes and the Zoom Apps Quick Launch setting.
 - [x] **Move dark mode toggle to Settings** — Dark mode toggle moved from the AppShell header to the SettingsView page header (Sun/Moon icon button right-aligned next to the title). Keeps the AppShell header clean with only search and settings icons.
 - [x] **Zoom App Manifest (beta)** — Added `zoom-app-manifest.json` with pre-configured OAuth scopes, all 16 SDK capabilities, event subscriptions (`meeting.rtms_started`/`meeting.rtms_stopped`), in-client OAuth, guest mode, and domain allow list. Developers in the manifest beta can upload this file to configure their Zoom App instead of setting each option manually.
+- [x] **Web OAuth redirect flow** — Browser-based OAuth for Marketplace installs. `GET /api/auth/start` redirects to Zoom OAuth, `GET /api/auth/callback` handles the redirect. Three new views: `LandingPageView` (marketing page with feature cards, onboarding steps, FAQ), `OnboardingView` (post-install success with next steps), `OAuthErrorView` (error state with retry and diagnostics).
+- [x] **AI-generated meeting titles** — Sparkle icon in `MeetingDetailView` calls `POST /api/meetings/:id/generate-title` to generate a concise title from transcript/summary. Generated title pre-fills the inline editor for review before saving.
+- [x] **Participant event tracking and timeline** — `ParticipantEvent` database model tracks join/leave events with millisecond timestamps. `ParticipantTimeline` component renders swimlane visualization with colored bars per participant. Inline participant events (joined/left, transcription lifecycle) shown in `InMeetingView` transcript. Initial roster vs. real join detection via `firstTranscriptReceived` flag to filter noise from Zoom's initial participant dump.
+- [x] **Meeting attribution via RTMS operator ID** — When RTMS auto-starts before the user opens the app, the meeting is created under a system user. When the real user later opens Arlo, the backend detects the orphaned meeting via the RTMS operator ID and reassigns ownership so the user sees their transcript.
 
 ---
 
@@ -34,9 +38,9 @@ This roadmap outlines what's been built, what's coming next, and where contribut
 The current guest views are minimal CTAs. `GuestInMeetingView` should display the meeting summary and a read-only transcript when available. `GuestNoMeetingView` should include a feature overview explaining what Arlo does, not just a login button.
 
 ### Handle auto-started but not opened state
-`advanced` · `backend/src/routes/rtms.js`, `backend/src/middleware/auth.js`
+`intermediate` · `backend/src/routes/rtms.js`, `backend/src/routes/meetings.js`
 
-When RTMS auto-starts via webhook before the user opens the app, the backend creates the meeting under a "system" user. When the real user later opens Arlo in that meeting, the app needs to detect the orphaned meeting and reassign ownership so the user sees their transcript.
+Meeting attribution via RTMS operator ID is implemented — orphaned meetings are reassigned when the real user opens Arlo. Remaining work: ensure the frontend detects the reassigned meeting and navigates to InMeetingView automatically, and handle edge cases where the operator ID is unavailable.
 
 ### README improvements
 `good-first-issue`
@@ -46,11 +50,6 @@ See the Documentation TODOs section below for specific items.
 ---
 
 ## Medium-term (v1.1)
-
-### Participant timeline view
-`advanced` · New DB model, webhook handling, new UI component
-
-A visual timeline showing when each participant joined and left the meeting. Requires a new database model for join/leave events, handling `meeting.participant_joined` and `meeting.participant_left` webhooks, and a timeline UI component (as a new tab in MeetingDetailView).
 
 ### Direct AI provider support
 `intermediate` · `backend/src/services/openrouter.js`, `frontend/src/views/SettingsView.js`
@@ -83,7 +82,7 @@ Create purpose-built views for specific use cases: **Healthcare** (HIPAA-aware t
 
 ## Known Issues
 
-- **Participant webhook events need audit** — `meeting.participant_joined` and `meeting.participant_left` webhooks may be firing but aren't currently used. These events are only relevant when the app is running as the meeting host. Audit whether these create unnecessary processing or noise, and either use them (for the timeline view) or unsubscribe.
+- **Participant event initial roster noise** — Zoom fires a batch of `participant_joined` events when RTMS connects (initial roster). These are now filtered using a `firstTranscriptReceived` flag, but edge cases may remain when meetings have many participants or unusual join patterns.
 - **"Live meeting in progress" persists after meeting ends** — The `LiveMeetingBanner` and `InMeetingView` remain active after a meeting ends and the user is no longer in the meeting context. `MeetingContext` does not clear the active meeting state when the Zoom meeting ends.
 - **Browser `/auth` route shows SDK error** — When a browser user visits the root URL (`/`), `RootView` detects no Zoom SDK and should show the landing page. However, if the user somehow navigates to `/#/auth` (e.g. via `ProtectedRoute` redirect), `AuthView` attempts to call `zoomSdk.authorize()` which fails outside the Zoom client. The "Connect with Zoom" button on `AuthView` should detect browser context and redirect to the Marketplace install URL (`/api/auth/start`) instead of calling SDK methods.
 - **`/welcome` onboarding could show upcoming meetings** — After a successful Marketplace install, the `/welcome` screen currently shows static "Next Steps" instructions. It should fetch the user's upcoming Zoom meetings (via `GET /api/zoom-meetings`) and display them with auto-open toggles, prompting the user to enable auto-open so Arlo launches automatically in their next meetings. This would make the post-install experience more actionable.

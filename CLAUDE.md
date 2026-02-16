@@ -108,14 +108,15 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
 ### Backend (`backend/src/`)
 - `server.js` — Express app setup, middleware, route mounting
 - `config.js` — Environment variable validation
-- `routes/auth.js` — OAuth routes (authorize, callback, me)
-- `routes/meetings.js` — Meeting CRUD and transcript endpoints
+- `routes/auth.js` — OAuth routes: in-client PKCE (authorize, callback, me) + web OAuth redirect flow (start, callback GET)
+- `routes/meetings.js` — Meeting CRUD, transcript endpoints, AI title generation, participant events
 - `routes/ai.js` — AI chat, suggestions, and summary (OpenRouter)
 - `routes/home.js` — Home dashboard highlights and reminders (`optionalAuth`)
 - `routes/rtms.js` — RTMS webhook handlers
 - `routes/search.js` — Full-text search
 - `routes/highlights.js` — Meeting highlights/bookmarks
 - `routes/zoom-meetings.js` — Upcoming meetings + auto-open (Zoom `open_apps` API)
+- `routes/preferences.js` — User preferences CRUD (chat notices, auto-start, AI config)
 - `services/auth.js` — Token management, PKCE, AES-128-CBC encryption
 - `services/openrouter.js` — LLM API client
 - `services/websocket.js` — WebSocket broadcast server
@@ -123,19 +124,22 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
 - `middleware/auth.js` — Session authentication middleware (`requireAuth`, `optionalAuth`)
 
 ### Frontend (`frontend/src/`)
-- `App.js` — HashRouter, route definitions, provider hierarchy (Auth → ZoomSdk → Meeting → Theme → Toast)
+- `App.js` — HashRouter, route definitions, provider hierarchy (Theme → ZoomSdk → Auth → Meeting → Toast)
 - `index.css` — Design tokens, typography (Source Serif 4 + Inter), light/dark theme variables
-- `views/` — 11 view components:
-  - `AuthView.js` — Login screen with "Connect with Zoom" CTA
+- `views/` — 14 view components:
+  - `AuthView.js` — In-client Zoom OAuth PKCE login screen with "Connect with Zoom" CTA
   - `HomeView.js` — Dashboard with upcoming meetings, weekly digest, action items, recurring topics, highlights, reminders
   - `MeetingsListView.js` — Paginated meeting cards with live badge
-  - `MeetingDetailView.js` — 5-tab view (Summary, Transcript, Participants, Tasks, Timeline) with inline title edit and delete
-  - `InMeetingView.js` — 2-tab live view (Transcript, Arlo Assist) with 3-state transport controls (live/paused/stopped)
-  - `SearchResultsView.js` — Full search page with query highlighting, empty/initial states
-  - `SettingsView.js` — Transcription preferences (toggles) + AI provider/model/API key configuration + auto-open meeting list
+  - `MeetingDetailView.js` — 5-tab view (Summary, Transcript, Participants, Tasks, Timeline) with inline title edit, AI title generation, and delete
+  - `InMeetingView.js` — 2-tab live view (Transcript, Arlo Assist) with 3-state transport controls (live/paused/stopped), inline participant events
+  - `SearchResultsView.js` — Full search page with query highlighting, empty/initial states, multi-source results (titles, summaries, transcripts)
+  - `SettingsView.js` — Transcription preferences (toggles) + AI provider/model/API key configuration + chat notice templates + auto-open meeting list
   - `UpcomingMeetingsView.js` — Upcoming Zoom meetings with per-meeting auto-open toggles (Zoom `open_apps` API)
   - `GuestNoMeetingView.js` — Feature cards (Mic, Sparkles, Search) + "Connect with Zoom" CTA
   - `GuestInMeetingView.js` — Live badge, summary/skeleton, faded transcript preview, CTA card
+  - `LandingPageView.js` — Browser marketing page with feature cards, onboarding steps, FAQ, "Install from Marketplace" CTA
+  - `OnboardingView.js` — Post-Marketplace OAuth success page with next steps
+  - `OAuthErrorView.js` — OAuth error page with retry option and diagnostics
   - `NotFoundView.js` — 404 page
 - `contexts/` — 5 context providers:
   - `AuthContext.js` — Auth state, session restoration, login/logout
@@ -167,7 +171,7 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
 
 ### Database
 - `backend/prisma/schema.prisma` — PostgreSQL schema
-- Key models: User, Meeting, Speaker, TranscriptSegment, Highlight, VttFile, UserToken
+- Key models: User, Meeting, Speaker, TranscriptSegment, Highlight, VttFile, UserToken, ParticipantEvent
 - `TranscriptSegment.seqNo` is UNIQUE per meeting (idempotency)
 - Full-text search uses Postgres GIN index on `text` column
 - All queries filtered by `ownerId` (row-level data isolation)
@@ -207,14 +211,20 @@ Tabs (AIPanel, MeetingDetailView, InMeetingView), ScrollArea (LiveTranscript, Me
 
 ### Authentication
 - `GET /api/auth/authorize` — Get PKCE challenge for in-client OAuth
-- `POST /api/auth/callback` — Exchange code for tokens
+- `POST /api/auth/callback` — Exchange code for tokens (in-client PKCE)
 - `GET /api/auth/me` — Get current authenticated user
+- `GET /api/auth/start` — Redirect to Zoom OAuth (web/Marketplace install flow)
+- `GET /api/auth/callback` — Handle Zoom OAuth redirect (web flow, exchanges code with client_secret)
+- `POST /api/auth/logout` — Clear session
 
 ### Meetings & Transcripts
 - `GET /api/meetings` — List user's meetings (params: from, to, limit, cursor)
 - `GET /api/meetings/:id` — Meeting details
 - `GET /api/meetings/:id/transcript` — Paginated segments (params: from_ms, to_ms, limit, after_seq)
 - `GET /api/meetings/:id/vtt` — Download WebVTT file
+- `PATCH /api/meetings/:id` — Rename meeting
+- `DELETE /api/meetings/:id` — Delete meeting
+- `POST /api/meetings/:id/generate-title` — AI-generate title from transcript/summary
 
 ### AI & Search
 - `GET /api/search` — Full-text search (params: q, meeting_id, from, to)
@@ -231,6 +241,10 @@ Tabs (AIPanel, MeetingDetailView, InMeetingView), ScrollArea (LiveTranscript, Me
 
 ### Highlights
 - Routes in `backend/src/routes/highlights.js`
+
+### Preferences
+- `GET /api/preferences` — Get user preferences
+- `PUT /api/preferences` — Update user preferences (shallow merge)
 
 ### Zoom Meetings (Upcoming + Auto-Open)
 - `GET /api/zoom-meetings` — List upcoming meetings from Zoom calendar (proxies `GET /v2/users/me/meetings?type=upcoming`)
@@ -313,7 +327,7 @@ arlo-meeting-assistant/
 │   ├── src/
 │   │   ├── server.js
 │   │   ├── config.js
-│   │   ├── routes/    # auth, meetings, ai, home, rtms, search, highlights, zoom-meetings
+│   │   ├── routes/    # auth, meetings, ai, home, rtms, search, highlights, zoom-meetings, preferences
 │   │   ├── services/  # auth, openrouter, websocket, zoomApi
 │   │   └── middleware/ # auth
 │   └── prisma/
@@ -325,7 +339,7 @@ arlo-meeting-assistant/
 │   └── src/
 │       ├── App.js         # HashRouter, routes, provider hierarchy
 │       ├── index.css      # Design tokens, typography, themes
-│       ├── views/         # 11 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, SearchResults, Settings, Upcoming, Guest×2, NotFound)
+│       ├── views/         # 14 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, SearchResults, Settings, Upcoming, Guest×2, LandingPage, Onboarding, OAuthError, NotFound)
 │       ├── contexts/      # 5 contexts (Auth, ZoomSdk, Meeting, Theme, Toast)
 │       ├── hooks/         # useZoomAuth (OAuth PKCE)
 │       ├── components/    # AppShell, ProtectedRoute, ErrorBoundary, LiveMeetingBanner, MeetingCard, OwlIcon, AIPanel, LiveTranscript, HighlightsPanel, DeleteMeetingDialog, ParticipantTimeline, InfoBanner, WarningBanner, TestPage
