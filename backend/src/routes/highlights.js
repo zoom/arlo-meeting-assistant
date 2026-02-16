@@ -21,20 +21,13 @@ router.get('/', optionalAuth, async (req, res) => {
       return res.status(400).json({ error: 'meetingId is required' });
     }
 
-    // Build where clause — filter by owner if authenticated, otherwise allow system user's meetings
+    // Only allow access to the authenticated user's own meetings
     const meetingWhere = { id: meetingId };
     if (req.user) {
       meetingWhere.ownerId = req.user.id;
     }
 
-    let meeting = await prisma.meeting.findFirst({ where: meetingWhere });
-
-    // If authenticated user doesn't own the meeting, check if it's a system user meeting
-    if (!meeting && req.user) {
-      meeting = await prisma.meeting.findFirst({
-        where: { id: meetingId },
-      });
-    }
+    const meeting = await prisma.meeting.findFirst({ where: meetingWhere });
 
     if (!meeting) {
       return res.status(404).json({ error: 'Meeting not found' });

@@ -36,7 +36,7 @@ const MOCK_UPCOMING = [
 export default function HomeView() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { meetingId, rtmsActive, rtmsLoading, startRTMS } = useMeeting();
+  const { meetingId, rtmsActive } = useMeeting();
   const [highlights, setHighlights] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
@@ -77,8 +77,7 @@ export default function HomeView() {
     fetchHomeData();
   }, []);
 
-  const handleStartTranscription = () => {
-    startRTMS(false);
+  const handleGoToMeeting = () => {
     if (meetingId) {
       navigate(`/meeting/${encodeURIComponent(meetingId)}`);
     }
@@ -119,6 +118,13 @@ export default function HomeView() {
     );
   };
 
+  // Auto-navigate to InMeetingView when RTMS is actively transcribing
+  useEffect(() => {
+    if (rtmsActive && meetingId) {
+      navigate(`/meeting/${encodeURIComponent(meetingId)}`, { replace: true });
+    }
+  }, [rtmsActive, meetingId, navigate]);
+
   if (loading) {
     return (
       <div className="home-loading">
@@ -140,22 +146,21 @@ export default function HomeView() {
       </div>
 
       {showMeetingInProgress && (
-        <Card className="home-meeting-card">
+        <Card className="home-meeting-card" onClick={handleGoToMeeting} style={{ cursor: 'pointer' }}>
           <div className="home-meeting-inner">
             <div className="home-meeting-text">
               <h2 className="text-serif">Meeting in Progress</h2>
               <p className="text-sans text-sm text-muted">
-                Start transcription to capture this meeting
+                Tap to view your meeting
               </p>
             </div>
             <Button
               size="lg"
-              onClick={handleStartTranscription}
-              disabled={rtmsLoading}
+              onClick={handleGoToMeeting}
               className="home-start-btn"
             >
               <Mic size={16} />
-              {rtmsLoading ? 'Starting...' : 'Start Transcription'}
+              View Meeting
             </Button>
           </div>
         </Card>

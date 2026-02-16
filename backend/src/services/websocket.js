@@ -1,6 +1,9 @@
 const WebSocket = require('ws');
 const url = require('url');
 const { verifyToken } = require('./auth');
+const { PrismaClient } = require('@prisma/client');
+
+const prisma = new PrismaClient();
 
 // Store active connections
 const connections = new Map(); // meetingId -> Set of WebSocket connections
@@ -157,6 +160,21 @@ async function handleWebSocketMessage(ws, data) {
           type: 'subscribed',
           data: { meetingId },
         }));
+
+        // Check if the meeting is already ongoing (e.g. RTMS auto-started before app opened)
+        prisma.meeting.findFirst({
+          where: { zoomMeetingId: meetingId, status: 'ongoing' },
+        }).then(meeting => {
+          if (meeting && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'meeting.status',
+              data: { meetingId, status: 'rtms_started', timestamp: new Date().toISOString() },
+            }));
+            console.log(`📡 Sent current meeting status (ongoing) to new subscriber for ${meetingId}`);
+          }
+        }).catch(err => {
+          console.warn('⚠️ Failed to check meeting status on subscribe:', err.message);
+        });
       }
       break;
 
