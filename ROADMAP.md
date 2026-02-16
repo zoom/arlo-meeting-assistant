@@ -83,6 +83,45 @@ Zoom's built-in transcription (RTMS captions) is the default and requires no add
 - Backend: transcription service abstraction layer to normalize external provider output into the existing `TranscriptSegment` format (speaker, text, timestamps).
 - Settings UI: provider selection dropdown and API key entry, extending the existing AI provider config pattern in SettingsView.
 
+### Voice commands from transcript
+`advanced` · `frontend/src/views/InMeetingView.js`, `frontend/src/contexts/MeetingContext.js`, `backend/src/routes/ai.js`, `frontend/src/views/SettingsView.js`
+
+Arlo listens for spoken commands during a live meeting and executes them — hands-free control of the app via the transcript stream. Users say **"Arlo, [command]"** and the app detects, classifies, and executes the intent in real time.
+
+**Activation (two modes):**
+- **Wake word (default)** — When voice mode is enabled, the frontend continuously scans incoming transcript segments for the "Arlo" trigger phrase. Detection runs client-side by matching the speaker's segments against the authenticated user's speaker name/ID, so only the Arlo session owner can issue commands (other participants saying "Arlo" are ignored).
+- **Push-to-command button** — A floating action button (FAB) overlaying the transcript area in `InMeetingView`. Tap to activate listening mode for the next spoken phrase — no wake word needed. Useful in noisy meetings or when wake word detection is unreliable.
+
+**Intent classification (AI-based):**
+The phrase following "Arlo" is sent to the LLM via a new `POST /api/ai/command` endpoint. The AI classifies the intent into one of the supported command categories and extracts parameters (e.g., action item text, recipient). A confidence threshold filters out low-confidence matches — ambiguous phrases are silently ignored to avoid false triggers from casual conversation that happens to include "Arlo."
+
+**Supported command categories:**
+
+| Category | Example commands | Execution |
+|---|---|---|
+| **App controls** | "Arlo, pause transcription" · "Arlo, resume" · "Arlo, stop recording" | Calls existing `pauseRTMS`/`resumeRTMS`/`stopRTMS` via MeetingContext |
+| **Data mutations** | "Arlo, create an action item for this" · "Arlo, bookmark this moment" · "Arlo, rename this meeting to Q1 Planning" · "Arlo, generate a summary" | Calls existing API endpoints (`POST /api/highlights`, `PATCH /api/meetings/:id`, `POST /api/ai/summary`) |
+| **Chat actions** | "Arlo, send a summary to the chat" · "Arlo, share the action items" · "Arlo, invite everyone to use the app" | Uses existing chat notice system (`zoomSdk.sendAppInvitation` for invites, `zoomSdk.chatMessage` for content) |
+| **Queries** | "Arlo, what were the action items so far?" · "Arlo, summarize the last 10 minutes" | Sends query to AI with transcript context, response appears as an inline assistant message in the transcript |
+
+**UI feedback (inline transcript badge):**
+When a command is detected, an inline badge/chip appears in the transcript at the point where the command was spoken. The badge shows a state progression: `recognized → executing → done` (or `failed` with reason). This keeps a visible history of all commands issued during the meeting without interrupting the transcript flow.
+
+**Chat responses (per-command):**
+Commands that naturally produce output for other participants (send summary, share action items, invite users) post a confirmation to the Zoom chat. Pure app-control commands (pause, resume) only show the inline badge — no chat noise.
+
+**Settings:**
+- **Voice commands toggle** (on/off) in `SettingsView` under a new "Voice Commands" section. Defaults to OFF.
+- **Wake word toggle** — enable/disable always-on transcript scanning (independent of the FAB button, which is always available when voice mode is on).
+
+**Speaker matching:**
+Only transcript segments attributed to the authenticated user's speaker name/ID are scanned for commands. This relies on the existing speaker identification from RTMS transcript data. Edge case: if speaker attribution is unavailable or ambiguous, fall back to processing all segments (with the confidence threshold providing a safety net).
+
+**Implementation scope:**
+- **Frontend:** Wake word scanner in `MeetingContext` (filters incoming WebSocket segments), FAB component in `InMeetingView`, inline command badge component, voice commands settings section, command execution dispatcher that calls existing context methods and API endpoints.
+- **Backend:** `POST /api/ai/command` endpoint — accepts a phrase, returns `{ intent, category, params, confidence }`. Uses a structured prompt with the command taxonomy for reliable classification.
+- **No new database models** — commands are ephemeral (executed and shown inline). Could optionally log to `Highlight` model for persistence.
+
 ### Specialized UI modes
 `advanced` · Frontend views, AI prompt engineering, new export formats
 
