@@ -18,19 +18,13 @@ router.get('/', optionalAuth, async (req, res) => {
   try {
     const { from, to, limit = 50, cursor } = req.query;
 
-    // Build where clause — show user's meetings + system user's meetings
+    // Build where clause — show only the authenticated user's meetings
     const where = {};
-    const systemUser = await prisma.user.findFirst({
-      where: { zoomUserId: 'system' }
-    });
-
     if (req.user) {
-      // Show both the user's own meetings and system-owned meetings
-      const ownerIds = [req.user.id];
-      if (systemUser) ownerIds.push(systemUser.id);
-      where.ownerId = { in: ownerIds };
-    } else if (systemUser) {
-      where.ownerId = systemUser.id;
+      where.ownerId = req.user.id;
+    } else {
+      // Unauthenticated users see nothing
+      return res.json({ meetings: [], total: 0, cursor: null });
     }
 
     if (from) where.startTime = { ...where.startTime, gte: new Date(from) };
@@ -118,6 +112,47 @@ router.patch('/by-zoom-id/:zoomMeetingId/topic', optionalAuth, async (req, res) 
   } catch (error) {
     console.error('Update meeting topic error:', error);
     res.status(500).json({ error: 'Failed to update meeting topic' });
+  }
+});
+
+/**
+ * GET /api/meetings/by-zoom-id/:zoomMeetingId/transcript
+ * Get transcript segments by Zoom meeting UUID (for InMeetingView before DB ID is known)
+ */
+router.get('/by-zoom-id/:zoomMeetingId/transcript', optionalAuth, async (req, res) => {
+  try {
+    const { zoomMeetingId } = req.params;
+    const { limit = 500 } = req.query;
+
+    const meeting = await prisma.meeting.findFirst({
+      where: { zoomMeetingId },
+      orderBy: { startTime: 'desc' },
+    });
+
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+
+    const segments = await prisma.transcriptSegment.findMany({
+      where: { meetingId: meeting.id },
+      include: { speaker: true },
+      orderBy: { seqNo: 'asc' },
+      take: parseInt(limit),
+    });
+
+    const serializedSegments = segments.map(seg => ({
+      speakerId: seg.speaker?.zoomParticipantId || 'unknown',
+      speakerLabel: seg.speaker?.displayName || seg.speaker?.label || 'Speaker',
+      text: seg.text,
+      tStartMs: Number(seg.tStartMs),
+      tEndMs: Number(seg.tEndMs),
+      seqNo: seg.seqNo.toString(),
+    }));
+
+    res.json({ segments: serializedSegments, meetingDbId: meeting.id });
+  } catch (error) {
+    console.error('Get transcript by zoom ID error:', error);
+    res.status(500).json({ error: 'Failed to fetch transcript' });
   }
 });
 
@@ -402,15 +437,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verify ownership - allow deleting user's own meetings and system-owned meetings
-    const systemUser = await prisma.user.findFirst({
-      where: { zoomUserId: 'system' }
-    });
-    const ownerIds = [req.user.id];
-    if (systemUser) ownerIds.push(systemUser.id);
-
+    // Verify ownership — users can only delete their own meetings
     const meeting = await prisma.meeting.findFirst({
-      where: { id, ownerId: { in: ownerIds } },
+      where: { id, ownerId: req.user.id },
     });
 
     if (!meeting) {

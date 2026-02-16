@@ -4,6 +4,7 @@ const axios = require('axios');
 const router = express.Router();
 const config = require('../config');
 const { broadcastTranscriptSegment, broadcastMeetingStatus, getStats } = require('../services/websocket');
+const { zoomGet } = require('../services/zoomApi');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
@@ -40,7 +41,11 @@ router.post('/webhook', async (req, res) => {
     });
   }
 
-  console.log(`📨 RTMS Webhook: ${event}`, JSON.stringify(payload, null, 2));
+  console.log(`📨 RTMS Webhook: ${event}`);
+  if (payload?.operator_id) {
+    console.log(`📨 Operator ID: ${payload.operator_id}`);
+  }
+  console.log(`📨 Payload:`, JSON.stringify(payload, null, 2));
 
   // Forward webhook to RTMS service
   if (event === 'meeting.rtms_started' || event === 'meeting.rtms_stopped') {
@@ -65,50 +70,78 @@ router.post('/webhook', async (req, res) => {
  * Receive RTMS status updates from RTMS service
  */
 router.post('/status', async (req, res) => {
-  const { meetingId, status, meetingTopic } = req.body;
+  const { meetingId, status, meetingTopic, operatorId } = req.body;
 
   console.log(`📡 RTMS Status Update: ${status} for meeting ${meetingId}`);
-  console.log(`📡 Request body:`, JSON.stringify(req.body, null, 2));
+  console.log(`📡 Operator ID: ${operatorId || 'not provided'}`);
 
   try {
     if (status === 'rtms_started') {
-      console.log('💾 Attempting to create/find meeting record...');
+      // Resolve operator to a real user if possible
+      let owner = null;
+      if (operatorId) {
+        owner = await prisma.user.findUnique({
+          where: { zoomUserId: operatorId },
+        });
+        if (owner) {
+          console.log(`✅ Matched operator ${operatorId} to user ${owner.displayName}`);
+        } else {
+          console.log(`⚠️ No user found for operator ${operatorId}, falling back to system user`);
+        }
+      }
+
+      // Fall back to system user
+      if (!owner) {
+        owner = await prisma.user.upsert({
+          where: { zoomUserId: 'system' },
+          update: {},
+          create: {
+            zoomUserId: 'system',
+            email: 'system@arlo-meeting-assistant.local',
+            displayName: 'System',
+          },
+        });
+      }
+
       // Create or find the meeting record
       let dbMeeting = await prisma.meeting.findFirst({
         where: { zoomMeetingId: meetingId },
       });
 
-      if (!dbMeeting) {
-        // Create a system user if needed (for meetings without authenticated user)
-        let systemUser = await prisma.user.findFirst({
-          where: { zoomUserId: 'system' },
-        });
-
-        if (!systemUser) {
-          systemUser = await prisma.user.create({
-            data: {
-              zoomUserId: 'system',
-              email: 'system@arlo-meeting-assistant.local',
-              displayName: 'System',
-            },
-          });
-          console.log('✅ Created system user for meeting storage');
+      if (dbMeeting) {
+        // If meeting exists under system user but we now have a real owner, reassign
+        if (owner.zoomUserId !== 'system' && dbMeeting.ownerId !== owner.id) {
+          const currentOwner = await prisma.user.findUnique({ where: { id: dbMeeting.ownerId } });
+          if (currentOwner?.zoomUserId === 'system') {
+            dbMeeting = await prisma.meeting.update({
+              where: { id: dbMeeting.id },
+              data: { ownerId: owner.id },
+            });
+            console.log(`✅ Reassigned meeting from system user to ${owner.displayName}`);
+          }
         }
-
+      } else {
         dbMeeting = await prisma.meeting.create({
           data: {
             zoomMeetingId: meetingId,
             title: meetingTopic || `Meeting ${new Date().toLocaleDateString()}`,
             startTime: new Date(),
             status: 'ongoing',
-            ownerId: systemUser.id,
+            ownerId: owner.id,
           },
         });
-        console.log(`✅ Created meeting record: ${dbMeeting.id}`);
+        console.log(`✅ Created meeting record: ${dbMeeting.id} (owner: ${owner.displayName})`);
       }
 
       // Cache the meeting ID mapping
       meetingCache.set(meetingId, dbMeeting.id);
+
+      // Enrich meeting metadata from Zoom API (non-blocking)
+      if (owner.zoomUserId !== 'system') {
+        enrichMeetingFromZoom(dbMeeting.id, meetingId, owner.id).catch(err => {
+          console.warn('⚠️ Meeting enrichment failed (non-fatal):', err.message);
+        });
+      }
 
     } else if (status === 'rtms_stopped') {
       // Mark meeting as completed
@@ -258,5 +291,52 @@ router.post('/debug-meeting', (req, res) => {
   }
   res.json({ received: meetingId, contextKeys: fullContext ? Object.keys(fullContext) : [] });
 });
+
+/**
+ * Enrich a meeting record with metadata from Zoom REST API.
+ * Fetches the meeting topic and numeric ID. Non-fatal on failure.
+ */
+async function enrichMeetingFromZoom(dbMeetingId, zoomMeetingUuid, ownerId) {
+  // Double-encode UUID (Zoom requires this for UUIDs starting with / or containing //)
+  const encodedUuid = encodeURIComponent(encodeURIComponent(zoomMeetingUuid));
+
+  let zoomMeeting;
+  try {
+    zoomMeeting = await zoomGet(ownerId, `/meetings/${encodedUuid}`);
+  } catch (err) {
+    if (err.response?.status === 404) {
+      // Try past_meetings endpoint as fallback
+      try {
+        zoomMeeting = await zoomGet(ownerId, `/past_meetings/${encodedUuid}`);
+      } catch (fallbackErr) {
+        console.warn(`⚠️ Could not fetch meeting from Zoom API (both endpoints failed)`);
+        return;
+      }
+    } else {
+      throw err;
+    }
+  }
+
+  if (!zoomMeeting) return;
+
+  const data = {};
+  const genericPattern = /^Meeting \d{1,2}\/\d{1,2}\/\d{2,4}$/;
+
+  // Update title if we got a real topic and current title is generic
+  const currentMeeting = await prisma.meeting.findUnique({ where: { id: dbMeetingId } });
+  if (zoomMeeting.topic && currentMeeting && genericPattern.test(currentMeeting.title)) {
+    data.title = zoomMeeting.topic;
+  }
+
+  // Store the numeric meeting number if available
+  if (zoomMeeting.id && currentMeeting && !currentMeeting.zoomMeetingNumber) {
+    data.zoomMeetingNumber = String(zoomMeeting.id);
+  }
+
+  if (Object.keys(data).length > 0) {
+    await prisma.meeting.update({ where: { id: dbMeetingId }, data });
+    console.log(`✅ Enriched meeting: ${JSON.stringify(data)}`);
+  }
+}
 
 module.exports = router;

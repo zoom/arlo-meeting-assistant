@@ -60,13 +60,15 @@ async function handleRTMSStarted(payload) {
   const {
     meeting_uuid,
     rtms_stream_id,
-    server_urls
+    server_urls,
+    operator_id
   } = payload;
 
   console.log('Starting RTMS session...');
   console.log(`Meeting UUID: ${meeting_uuid}`);
   console.log(`Stream ID: ${rtms_stream_id}`);
   console.log(`Server URLs: ${server_urls}`);
+  console.log(`Operator ID: ${operator_id || 'not provided'}`);
 
   // Check if already connected to this meeting (prevent duplicate webhook handling)
   if (activeSessions.has(meeting_uuid)) {
@@ -130,6 +132,7 @@ async function handleRTMSStarted(payload) {
       client,
       streamId: rtms_stream_id,
       startTime: new Date(),
+      operatorId: operator_id || null,
     });
 
     // Join the RTMS session — v1.0 no longer uses pollInterval
@@ -142,7 +145,7 @@ async function handleRTMSStarted(payload) {
     console.log('Join result:', result);
 
     // Notify backend that RTMS is active
-    await notifyBackend(meeting_uuid, 'rtms_started');
+    await notifyBackend(meeting_uuid, 'rtms_started', operator_id);
 
   } catch (error) {
     console.error('Failed to start RTMS:', error);
@@ -221,23 +224,40 @@ async function handleTranscript(meetingId, transcript) {
 
   // Save to database
   try {
-    // Find or create meeting (without owner for now - RTMS doesn't have user context)
+    // Find or create meeting — use operatorId from session to assign real owner
     let meeting = await prisma.meeting.findFirst({
       where: { zoomMeetingId: meetingId },
     });
 
     if (!meeting) {
-      // For RTMS-created meetings, we need a system user or skip the owner requirement
-      // First, try to find or create a system user
-      let systemUser = await prisma.user.upsert({
-        where: { zoomUserId: 'system' },
-        update: {},
-        create: {
-          zoomUserId: 'system',
-          email: 'system@arlo.local',
-          displayName: 'System',
-        },
-      });
+      const session = activeSessions.get(meetingId);
+      const operatorId = session?.operatorId;
+      let ownerId;
+
+      // Try to find the real user by operator_id (Zoom user ID)
+      if (operatorId) {
+        const realUser = await prisma.user.findUnique({
+          where: { zoomUserId: operatorId },
+        });
+        if (realUser) {
+          ownerId = realUser.id;
+          console.log(`Matched operator ${operatorId} to user ${realUser.displayName}`);
+        }
+      }
+
+      // Fall back to system user if no operator match
+      if (!ownerId) {
+        const systemUser = await prisma.user.upsert({
+          where: { zoomUserId: 'system' },
+          update: {},
+          create: {
+            zoomUserId: 'system',
+            email: 'system@arlo.local',
+            displayName: 'System',
+          },
+        });
+        ownerId = systemUser.id;
+      }
 
       meeting = await prisma.meeting.create({
         data: {
@@ -245,7 +265,7 @@ async function handleTranscript(meetingId, transcript) {
           title: `Meeting ${new Date().toLocaleDateString()}`,
           startTime: new Date(),
           status: 'ongoing',
-          ownerId: systemUser.id,
+          ownerId,
         },
       });
       console.log(`Created meeting: ${meeting.id}`);
@@ -327,12 +347,13 @@ async function broadcastSegment(meetingId, segment) {
 /**
  * Notify backend of RTMS status change
  */
-async function notifyBackend(meetingId, status) {
+async function notifyBackend(meetingId, status, operatorId) {
   try {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
     await axios.post(`${backendUrl}/api/rtms/status`, {
       meetingId,
       status,
+      ...(operatorId && { operatorId }),
     });
     console.log(`Notified backend: ${status}`);
   } catch (error) {

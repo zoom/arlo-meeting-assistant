@@ -65,14 +65,11 @@ router.get('/', async (req, res) => {
 
     console.log(`🔍 Searching for: "${q}"`);
 
-    // Include both user's own meetings and system-owned meetings (matches meetings.js pattern)
-    const systemUser = await prisma.user.findFirst({ where: { zoomUserId: 'system' } });
+    // Build meeting filter — only search the authenticated user's meetings
     const ownerIds = [req.user.id];
-    if (systemUser) ownerIds.push(systemUser.id);
 
-    // Build meeting filter for authenticated user
     const meetingWhere = {
-      ownerId: { in: ownerIds },
+      ownerId: req.user.id,
       ...(meeting_id && { id: meeting_id }),
       ...(from && { startTime: { gte: new Date(from) } }),
       ...(to && { startTime: { lte: new Date(to) } }),

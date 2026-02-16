@@ -60,6 +60,30 @@ export default function InMeetingView() {
     connectWebSocket(wsToken, meetingId);
   }, [isAuthenticated, ws, meetingId, wsToken, connectWebSocket]);
 
+  // Load existing transcript segments from DB (for auto-started RTMS sessions)
+  const historicalLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!rtmsActive || !meetingId || historicalLoadedRef.current) return;
+    historicalLoadedRef.current = true;
+
+    fetch(`/api/meetings/by-zoom-id/${encodeURIComponent(meetingId)}/transcript`, {
+      credentials: 'include',
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.segments?.length > 0) {
+          setSegments(prev => {
+            // Merge: DB segments first, then any WS segments not already present
+            const dbSeqs = new Set(data.segments.map(s => s.seqNo));
+            const newFromWs = prev.filter(s => !dbSeqs.has(String(s.seqNo)));
+            return [...data.segments, ...newFromWs];
+          });
+          console.log(`Loaded ${data.segments.length} historical segments from DB`);
+        }
+      })
+      .catch(() => {});
+  }, [rtmsActive, meetingId]);
+
   // Listen for transcript segments
   useEffect(() => {
     if (!ws) return;
