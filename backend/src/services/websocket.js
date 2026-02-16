@@ -161,16 +161,25 @@ async function handleWebSocketMessage(ws, data) {
           data: { meetingId },
         }));
 
-        // Check if the meeting is already ongoing (e.g. RTMS auto-started before app opened)
+        // Check current meeting status and inform the subscriber
         prisma.meeting.findFirst({
-          where: { zoomMeetingId: meetingId, status: 'ongoing' },
+          where: { zoomMeetingId: meetingId },
+          orderBy: { createdAt: 'desc' },
         }).then(meeting => {
           if (meeting && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'meeting.status',
-              data: { meetingId, status: 'rtms_started', timestamp: new Date().toISOString() },
-            }));
-            console.log(`📡 Sent current meeting status (ongoing) to new subscriber for ${meetingId}`);
+            if (meeting.status === 'ongoing') {
+              ws.send(JSON.stringify({
+                type: 'meeting.status',
+                data: { meetingId, status: 'rtms_started', timestamp: new Date().toISOString() },
+              }));
+              console.log(`📡 Sent current meeting status (ongoing) to new subscriber for ${meetingId}`);
+            } else if (meeting.status === 'completed') {
+              ws.send(JSON.stringify({
+                type: 'meeting.status',
+                data: { meetingId, status: 'rtms_stopped', timestamp: new Date().toISOString() },
+              }));
+              console.log(`📡 Sent current meeting status (completed) to new subscriber for ${meetingId}`);
+            }
           }
         }).catch(err => {
           console.warn('⚠️ Failed to check meeting status on subscribe:', err.message);

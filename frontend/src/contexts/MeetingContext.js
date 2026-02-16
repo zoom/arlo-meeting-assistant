@@ -27,8 +27,32 @@ export function MeetingProvider({ children }) {
   const autoStartAttemptedRef = useRef(false);
   const titleSentRef = useRef(false);
   const hasBeenActiveRef = useRef(false);
+  const shouldReconnectRef = useRef(true);
 
   const meetingId = meetingContext?.meetingUUID;
+
+  // Clean up when meeting ends (meetingId becomes falsy) and prepare for new meetings
+  useEffect(() => {
+    if (meetingId) {
+      // New meeting — allow WS reconnects and reset per-meeting refs
+      shouldReconnectRef.current = true;
+      autoStartAttemptedRef.current = false;
+      titleSentRef.current = false;
+      hasBeenActiveRef.current = false;
+      meetingStartTimeRef.current = null;
+    } else {
+      // Meeting ended — stop reconnecting, close WS, reset state
+      shouldReconnectRef.current = false;
+      setRtmsActive(false);
+      setRtmsPaused(false);
+      setWs(prev => {
+        if (prev && prev.readyState !== WebSocket.CLOSED) {
+          prev.close();
+        }
+        return null;
+      });
+    }
+  }, [meetingId]);
 
   // Send a chat notice to Zoom meeting chat for a given event type
   const sendChatNotice = useCallback((eventType) => {
@@ -103,10 +127,14 @@ export function MeetingProvider({ children }) {
 
     socket.onclose = () => {
       console.log('WebSocket disconnected');
-      setTimeout(() => {
-        const reconnected = connectWebSocket(token, meetingId);
-        if (reconnected) setWs(reconnected);
-      }, 5000);
+      if (shouldReconnectRef.current) {
+        setTimeout(() => {
+          if (shouldReconnectRef.current) {
+            const reconnected = connectWebSocket(token, meetingId);
+            if (reconnected) setWs(reconnected);
+          }
+        }, 5000);
+      }
     };
 
     setWs(socket);
