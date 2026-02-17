@@ -84,12 +84,13 @@ body {
 
 #root {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
   max-width: 900px;
   margin: 0 auto;
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
   isolation: isolate;
+  overflow: hidden;
 }
 
 /* =============================================================================
