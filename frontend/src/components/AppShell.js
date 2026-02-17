@@ -66,7 +66,7 @@ export default function AppShell() {
       <header className="app-header">
         <div className="header-left">
           {showBack ? (
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/home')}>
               <ArrowLeft size={16} />
             </Button>
           ) : (
