@@ -4,6 +4,9 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Header */
@@ -19,6 +22,60 @@
   gap: 8px;
 }
 
+/* Title editing (scoped to in-meeting-header) */
+.in-meeting-header .title-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.in-meeting-header .title-edit-input {
+  flex: 1;
+  font-family: var(--font-serif) !important;
+  font-size: 1.5rem !important;
+  height: auto;
+  padding: 4px 8px;
+  min-width: 0;
+}
+
+.in-meeting-header .title-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.in-meeting-header .title-action {
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.in-meeting-header .title-action-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.in-meeting-header .title-display:hover .title-action {
+  opacity: 1;
+}
+
+.in-meeting-header .spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Transcript states */
 .transcript-state-card .transcript-state-inner {
   padding: 48px 16px;
@@ -29,11 +86,20 @@
   gap: 16px;
 }
 
+.in-meeting-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .in-meeting-tab-panel {
   margin-top: 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Transcript active container (controls + card) */
@@ -41,6 +107,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Transcription controls bar */
@@ -195,14 +263,23 @@
 /* Live transcript */
 .transcript-live-card {
   position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .transcript-scroll-root {
   position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .transcript-viewport {
-  height: 500px;
+  flex: 1;
+  min-height: 200px;
   overflow-y: auto;
   padding: 20px;
 }

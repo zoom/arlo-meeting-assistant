@@ -29,6 +29,7 @@ export function MeetingProvider({ children }) {
   const titleSentRef = useRef(false);
   const hasBeenActiveRef = useRef(false);
   const statusCheckRef = useRef(false);
+  const titleUserRenamedRef = useRef(false);
   const shouldReconnectRef = useRef(true);
   const isGuestRef = useRef(isGuest);
   const userContextRef = useRef(userContext);
@@ -44,6 +45,7 @@ export function MeetingProvider({ children }) {
       shouldReconnectRef.current = true;
       autoStartAttemptedRef.current = false;
       titleSentRef.current = false;
+      titleUserRenamedRef.current = false;
       hasBeenActiveRef.current = false;
       statusCheckRef.current = false;
       meetingStartTimeRef.current = null;
@@ -321,7 +323,7 @@ export function MeetingProvider({ children }) {
   useEffect(() => {
     const topic = meetingContext?.meetingTopic;
     const meetingNumber = meetingContext?.meetingID;
-    if (!rtmsActive || !meetingId || !topic || titleSentRef.current) return;
+    if (!rtmsActive || !meetingId || !topic || titleSentRef.current || titleUserRenamedRef.current) return;
     titleSentRef.current = true;
 
     let attempts = 0;
@@ -341,6 +343,10 @@ export function MeetingProvider({ children }) {
     sendTitle();
   }, [rtmsActive, meetingId, meetingContext?.meetingTopic]);
 
+  const setTitleUserRenamed = useCallback(() => {
+    titleUserRenamedRef.current = true;
+  }, []);
+
   return (
     <MeetingContext.Provider value={{
       rtmsActive,
@@ -357,6 +363,7 @@ export function MeetingProvider({ children }) {
       resumeRTMS,
       connectWebSocket,
       setWs,
+      setTitleUserRenamed,
     }}>
       {children}
     </MeetingContext.Provider>

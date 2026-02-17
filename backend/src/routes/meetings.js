@@ -69,10 +69,15 @@ router.get('/', optionalAuth, async (req, res) => {
 router.patch('/by-zoom-id/:zoomMeetingId/topic', optionalAuth, async (req, res) => {
   try {
     const { zoomMeetingId } = req.params;
-    const { title, meetingNumber } = req.body;
+    const { title, meetingNumber, force } = req.body;
 
     if (!title || title.trim().length === 0) {
       return res.status(400).json({ error: 'Title is required' });
+    }
+
+    // force=true requires authentication (explicit user rename)
+    if (force && !req.user) {
+      return res.status(401).json({ error: 'Authentication required for explicit rename' });
     }
 
     const meeting = await prisma.meeting.findFirst({
@@ -87,10 +92,15 @@ router.patch('/by-zoom-id/:zoomMeetingId/topic', optionalAuth, async (req, res) 
     // Build update data
     const data = {};
 
-    // Only update title if current title matches the generic date pattern
-    const genericPattern = /^Meeting \d{1,2}\/\d{1,2}\/\d{2,4}$/;
-    if (genericPattern.test(meeting.title)) {
+    if (force) {
+      // Explicit user rename — always update
       data.title = title.trim();
+    } else {
+      // Auto-sync — only update if current title matches the generic date pattern
+      const genericPattern = /^Meeting \d{1,2}\/\d{1,2}\/\d{2,4}$/;
+      if (genericPattern.test(meeting.title)) {
+        data.title = title.trim();
+      }
     }
 
     // Store the numeric meeting number if provided and not already set

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Tabs, ScrollArea } from '@base-ui/react';
-import { ArrowDown, X, Sparkles, Pause, Play, Square, LogIn, LogOut, Mic, MicOff, Share2, Check, Users } from 'lucide-react';
+import { ArrowDown, X, Sparkles, Pause, Play, Square, LogIn, LogOut, Mic, MicOff, Share2, Check, Users, Pencil, Loader2 } from 'lucide-react';
 import { useMeeting } from '../contexts/MeetingContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useZoomSdk } from '../contexts/ZoomSdkContext';
@@ -48,7 +48,7 @@ function InlineEventLabel({ eventType, name }) {
 export default function InMeetingView() {
   useParams(); // id available from route but meetingId comes from context
   const navigate = useNavigate();
-  const { ws, rtmsActive, rtmsPaused, rtmsLoading, startRTMS, stopRTMS, pauseRTMS, resumeRTMS, meetingId, connectWebSocket, viewers } = useMeeting();
+  const { ws, rtmsActive, rtmsPaused, rtmsLoading, startRTMS, stopRTMS, pauseRTMS, resumeRTMS, meetingId, connectWebSocket, viewers, setTitleUserRenamed } = useMeeting();
   const { isAuthenticated, wsToken } = useAuth();
   const { zoomSdk, meetingContext, isTestMode, runningContext } = useZoomSdk();
   const { authorize } = useZoomAuth();
@@ -72,6 +72,11 @@ export default function InMeetingView() {
   const [newTask, setNewTask] = useState('');
   const [inviteMenuOpen, setInviteMenuOpen] = useState(false);
   const [inviteSent, setInviteSent] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [isSavingTitle, setIsSavingTitle] = useState(false);
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
+  const [displayTitle, setDisplayTitle] = useState(null);
   const transcriptRef = useRef(null);
   const inviteDropdownRef = useRef(null);
 
@@ -292,8 +297,70 @@ export default function InMeetingView() {
     return null;
   }
 
-  // Get meeting title (from meetingContext or URL)
-  const title = meetingContext?.meetingTopic || 'Live Meeting';
+  // Title editing handlers
+  const handleEditTitle = () => {
+    setIsEditingTitle(true);
+    setEditedTitle(displayTitle || meetingContext?.meetingTopic || 'Live Meeting');
+  };
+
+  const handleSaveTitle = async () => {
+    if (!editedTitle.trim() || editedTitle === (displayTitle || meetingContext?.meetingTopic || 'Live Meeting')) {
+      setIsEditingTitle(false);
+      return;
+    }
+    setIsSavingTitle(true);
+    try {
+      const res = await fetch(`/api/meetings/by-zoom-id/${encodeURIComponent(meetingId)}/topic`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ title: editedTitle, force: true }),
+      });
+      if (res.ok) {
+        setDisplayTitle(editedTitle);
+        setTitleUserRenamed();
+        addToast('Meeting renamed', 'success');
+      } else {
+        addToast('Failed to rename meeting', 'error');
+      }
+    } catch {
+      addToast('Failed to rename meeting', 'error');
+    } finally {
+      setIsSavingTitle(false);
+      setIsEditingTitle(false);
+    }
+  };
+
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false);
+  };
+
+  const handleGenerateTitle = async (e) => {
+    e.stopPropagation();
+    setIsGeneratingTitle(true);
+    try {
+      const res = await fetch('/api/ai/generate-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ meetingId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEditedTitle(data.title);
+        setIsEditingTitle(true);
+      } else {
+        addToast('Failed to generate title', 'error');
+      }
+    } catch {
+      addToast('Failed to generate title', 'error');
+    } finally {
+      setIsGeneratingTitle(false);
+    }
+  };
+
+  // Get meeting title (user rename > Zoom topic > fallback)
+  const title = displayTitle || meetingContext?.meetingTopic || 'Live Meeting';
   const participants = []; // TODO: from Zoom SDK getMeetingParticipants
 
   return (
@@ -305,7 +372,46 @@ export default function InMeetingView() {
             <div className="live-dot" />
             <div className="live-dot-ping" />
           </div>
-          <h1 className="text-serif text-2xl">{title}</h1>
+          {isAuthenticated && isEditingTitle ? (
+            <div className="title-edit-row">
+              <input
+                type="text"
+                className="input title-edit-input text-serif text-2xl"
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveTitle();
+                  if (e.key === 'Escape') handleCancelEditTitle();
+                }}
+                autoFocus
+                onFocus={(e) => e.target.select()}
+              />
+              <Button variant="ghost" size="icon" onClick={handleSaveTitle} disabled={isSavingTitle}>
+                {isSavingTitle ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleCancelEditTitle} disabled={isSavingTitle}>
+                <X size={16} />
+              </Button>
+            </div>
+          ) : isAuthenticated ? (
+            <div className="title-display" onClick={handleEditTitle}>
+              <h1 className="text-serif text-2xl">{title}</h1>
+              <Pencil size={16} className="title-action text-muted" />
+              <button
+                className="title-action-btn"
+                onClick={handleGenerateTitle}
+                disabled={isGeneratingTitle}
+                title="Generate title with AI"
+              >
+                {isGeneratingTitle
+                  ? <Loader2 size={16} className="spin text-muted" />
+                  : <Sparkles size={16} className="title-action text-muted" />
+                }
+              </button>
+            </div>
+          ) : (
+            <h1 className="text-serif text-2xl">{title}</h1>
+          )}
         </div>
         {participants.length > 0 && (
           <p className="text-sans text-sm text-muted">{participants.join(', ')}</p>
@@ -319,7 +425,7 @@ export default function InMeetingView() {
       </div>
 
       {/* Tabs: Transcript | Arlo Assist */}
-      <Tabs.Root defaultValue="transcript">
+      <Tabs.Root defaultValue="transcript" className="in-meeting-tabs">
         <Tabs.List className="tabs-list" data-cols="2">
           <Tabs.Tab value="transcript" className="tab-trigger">Transcript</Tabs.Tab>
           <Tabs.Tab value="assist" className="tab-trigger">Arlo Assist</Tabs.Tab>
