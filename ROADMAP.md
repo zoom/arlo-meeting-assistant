@@ -47,8 +47,88 @@ See the Documentation TODOs section below for specific items.
 
 Currently all AI features route through OpenRouter. This item adds support for calling Anthropic, OpenAI, or local LLM endpoints directly. Includes a Settings UI where users can enter their own API keys and select a preferred provider.
 
+### Action item persistence and tracking
+`intermediate` · `backend/prisma/schema.prisma`, `backend/src/services/openrouter.js`, `backend/src/routes/ai.js`, `frontend/src/views/MeetingDetailView.js`, `frontend/src/views/HomeView.js`
+
+AI-extracted action items are currently ephemeral — every visit to the Tasks tab re-calls the LLM and produces inconsistent results. This feature persists action items to a new `ActionItem` database table, extracted during summary generation in a single consolidated LLM call (eliminating the current separate `extractActionItems` call).
+
+**ActionItem model:** `id`, `meetingId`, `ownerId` (Arlo user), `task` (text), `assignee` (speaker name, free text — participants may not be Arlo users), `priority` (high/medium/low), `dueDate` (AI-extracted from phrases like "by Friday", or user-set), `status` (open/done/dismissed), `sourceTimestampMs` (transcript timestamp for "jump to source"), `createdAt`, `updatedAt`. Indexed on `[ownerId, status]` and `[meetingId]`.
+
+**Editing:** Action items are AI-extracted only (users cannot create from scratch), but all fields are editable after extraction — text, assignee, priority, due date. Users can mark items done (checkbox) or dismiss irrelevant ones. New `routes/action-items.js` with `GET` (list with filters: meetingId, status, date range) and `PATCH` (edit any field).
+
+**Key optimization:** Expand the `generateSummary()` prompt to extract action items, decisions, and topics in one LLM call instead of the current two separate calls (`generateSummary` + `extractActionItems`). This halves API usage on the free OpenRouter tier while extracting more structured data.
+
+**Frontend:** Update MeetingDetailView Tasks tab to load persisted items from DB with inline editing UI (editable text, assignee, priority badge, due date, completion checkbox). Replace `mockActionItems` on HomeView with `GET /api/action-items?status=open&from={weekStart}`.
+
+### Decision persistence
+`intermediate` · `backend/prisma/schema.prisma`, `backend/src/services/openrouter.js`, `backend/src/routes/ai.js`
+
+Decisions currently exist only as string arrays inside `Meeting.summary.decisions` — they can't be searched across meetings or linked to transcript timestamps. This feature extracts decisions to a new `Decision` table during summary generation (same consolidated LLM call as action items).
+
+**Decision model:** `id`, `meetingId`, `ownerId`, `text`, `context` (surrounding discussion), `participants[]` (who was involved), `sourceTimestampMs`, `createdAt`. Indexed on `[ownerId, createdAt]`.
+
+Decisions are displayed in MeetingDetailView Summary tab with participant attribution and included in search results (extend `/api/search` to query the Decision table as a fourth result type alongside titles, summaries, and transcripts).
+
+### Topic extraction and recurring topic detection
+`intermediate` · `backend/prisma/schema.prisma`, `backend/src/services/openrouter.js`, `backend/src/routes/home.js`, `frontend/src/views/HomeView.js`
+
+Extract 3–5 normalized topic labels per meeting during summary generation and store in a new `MeetingTopic` table. Detect recurring topics with a SQL `GROUP BY` query where a topic appears in 2+ meetings within a time window — no additional AI calls needed.
+
+**MeetingTopic model:** `id`, `meetingId`, `ownerId`, `topic` (normalized label like "Q3 Budget"), `weight` (topic prominence), `createdAt`. Unique on `[meetingId, topic]`.
+
+Replaces the hardcoded `mockRecurringTopics` array in HomeView (line 28). New `GET /api/home/recurring-topics?from={date}&to={date}` endpoint returns topics ordered by cross-meeting frequency.
+
+### Real weekly digest
+`intermediate` · `backend/src/routes/home.js`, `frontend/src/views/HomeView.js` · depends on: Topic extraction
+
+Replace the hardcoded `mockWeeklyDigest` (HomeView line 13) with a real `GET /api/home/weekly-digest` endpoint. Meeting count and total duration are computed from pure SQL. Top topics come from the `MeetingTopic` table. An optional single LLM call generates a 2-sentence weekly narrative from concatenated meeting summaries (cached per week to avoid repeated calls).
+
+**Two modes:** (a) Stats-only (instant, no AI) — meeting count, total time, top 3 topics. (b) With narrative — adds a synthesized summary of the week's key themes and outcomes.
+
 ### ~~Web-based OAuth redirect flow~~ ✅
 Implemented — `GET /api/auth/start`, `GET /api/auth/callback`, landing page, onboarding, and error views. See Known Issues for remaining gaps.
+
+---
+
+## Medium-term (v1.2) — Cross-Meeting Intelligence
+
+### Cross-meeting decision log
+`intermediate` · `backend/src/routes/decisions.js` (new), `frontend/src/views/` (new view or section)
+
+A searchable, filterable list of all decisions across meetings. Users can answer "What did we decide about X?" without remembering which meeting it was in. Each decision links back to its source meeting and transcript timestamp.
+
+New `routes/decisions.js` with paginated `GET /api/decisions` (filters: date range, search text, meeting ID). Extend `/api/search` to include decisions as a result type. Accessible from the home dashboard or app shell navigation.
+
+### Meeting series and follow-up detection
+`advanced` · `backend/prisma/schema.prisma`, `backend/src/routes/meetings.js`
+
+Automatically detect related meetings (recurring series, follow-ups) by analyzing Zoom meeting number matches (same recurring meeting), title similarity, and participant overlap > 70%. Link meetings into threads so users can track conversation progression across sessions.
+
+New optional `meetingSeriesId` field on the Meeting model. "Related meetings" section in MeetingDetailView. Detection uses heuristics first (no AI); optional AI enhancement compares summaries to confirm topical continuity.
+
+### Commitment tracking and stale item detection
+`intermediate` · `backend/src/routes/action-items.js`, `frontend/src/views/HomeView.js`
+
+Surface overdue and stale action items on the home dashboard. An item is "stale" when it's been open longer than a configurable threshold (default: 7 days) or its `dueDate` has passed. A "Needs attention" section on the home shows stale items with meeting context and quick-action buttons (mark done, dismiss).
+
+Optional enhancement: when generating a summary for a meeting with overlapping participants, include open action items from previous meetings in the prompt context and ask the LLM whether any were addressed.
+
+### Topic trends over time
+`intermediate` · `backend/src/routes/home.js`, `frontend/src/views/HomeView.js`
+
+Extend recurring topics from a single-week snapshot to a multi-week time series. Show which topics are trending up, stable, or fading. New `GET /api/home/topic-trends?weeks=4` endpoint queries `MeetingTopic` grouped by week and topic. Frontend renders lightweight CSS-based bars or sparklines per topic — no heavy charting library. Pure SQL computation, no AI calls.
+
+### Pre-meeting context briefing
+`advanced` · `backend/src/routes/ai.js`, `frontend/src/views/InMeetingView.js`
+
+When a user opens Arlo in a meeting, automatically surface relevant context from previous meetings with overlapping participants: open action items assigned to attendees, recent decisions, and shared topics. Displayed as a collapsible "Context" card in InMeetingView before transcript starts flowing.
+
+New `GET /api/meetings/:id/context` endpoint queries ActionItem, Decision, and MeetingTopic tables filtered by participant overlap. Mostly DB queries; optional single LLM call to synthesize a 3-sentence briefing. Participant matching via `Speaker.displayName` against the current Zoom SDK participant list.
+
+### Smart reminders
+`intermediate` · `backend/src/routes/home.js`, `frontend/src/views/HomeView.js`
+
+Replace the current reminders system (which returns yesterday's Highlight bookmarks via `GET /api/home/reminders`) with AI-aware reminders: overdue action items, approaching deadlines, and stale commitments. Priority ordering: overdue first, then approaching deadline, then stale. Frontend updates with priority indicators and quick-action buttons (mark done, snooze).
 
 ---
 
@@ -156,6 +236,26 @@ Only transcript segments attributed to the authenticated user's speaker name/ID 
 | Done | Green check + result text | Successful execution |
 | Failed | Red x + error reason | Execution error |
 | Confirm (destructive) | Chip with Confirm/Cancel buttons | Stop, delete — auto-dismiss after timeout |
+
+### Automatic post-meeting extraction
+`intermediate` · `backend/src/services/`, `rtms/src/index.js`
+
+Automatically trigger summary + action item + decision + topic extraction when a meeting ends (`meeting.rtms_stopped` webhook) instead of waiting for the user to view the Summary tab. This ensures the home dashboard has fresh data immediately. Includes a minimum transcript threshold (skip extraction for meetings with < 5 segments) and rate limiting for simultaneous meeting endings.
+
+### AI-powered cross-meeting search
+`advanced` · `backend/src/routes/search.js`, `backend/src/services/openrouter.js`, `frontend/src/views/SearchResultsView.js`
+
+Extend search to support natural language questions across all meetings. Instead of keyword matching, users ask "What did we decide about the mobile app timeline?" and get an AI-synthesized answer with citations to specific meetings and transcript timestamps. New `POST /api/search/ask` endpoint. Toggle between keyword and "Ask" modes in SearchResultsView. Rate-limited (one AI call per query).
+
+### Participant insights and analytics
+`intermediate` · `backend/src/routes/meetings.js`, `frontend/src/views/MeetingDetailView.js`
+
+Per-meeting and cross-meeting participant analytics: speaking time distribution (from `TranscriptSegment` durations), action item ownership count (from `ActionItem.assignee`), and meeting attendance patterns. Computable from existing data with no AI calls. Enhance the MeetingDetailView Participants tab with speaking time bars and action item counts.
+
+### Summary templates and styles
+`good-first-issue` · `backend/src/services/openrouter.js`, `frontend/src/views/SettingsView.js`
+
+Allow users to choose summary styles: "Executive brief" (2–3 sentences), "Detailed notes" (full structure), "Action-focused" (decisions and items only), "Technical" (architecture emphasis). Each style modifies the system prompt in `generateSummary()`. Preference stored via `/api/preferences`, with per-meeting override in MeetingDetailView.
 
 ### Specialized UI modes
 `advanced` · Frontend views, AI prompt engineering, new export formats
