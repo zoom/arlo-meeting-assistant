@@ -103,9 +103,12 @@ router.post('/status', async (req, res) => {
         });
       }
 
-      // Create or find the meeting record
+      // Find an ongoing meeting with this UUID, or create a new record.
+      // If only a completed meeting exists (e.g. recurring/PMR reusing the same UUID),
+      // create a fresh record so old transcript segments stay with the old meeting.
       let dbMeeting = await prisma.meeting.findFirst({
-        where: { zoomMeetingId: meetingId },
+        where: { zoomMeetingId: meetingId, status: 'ongoing' },
+        orderBy: { createdAt: 'desc' },
       });
 
       if (dbMeeting) {
@@ -236,10 +239,11 @@ async function saveTranscriptSegment(zoomMeetingId, segment) {
   // Get the database meeting ID from cache
   let dbMeetingId = meetingCache.get(zoomMeetingId);
 
-  // If not in cache, try to find it in the database
+  // If not in cache, try to find the most recent meeting in the database
   if (!dbMeetingId) {
     const dbMeeting = await prisma.meeting.findFirst({
       where: { zoomMeetingId: zoomMeetingId },
+      orderBy: { createdAt: 'desc' },
     });
     if (dbMeeting) {
       dbMeetingId = dbMeeting.id;
@@ -334,6 +338,7 @@ async function saveParticipantEvents(zoomMeetingId, events) {
   if (!dbMeetingId) {
     const dbMeeting = await prisma.meeting.findFirst({
       where: { zoomMeetingId: zoomMeetingId },
+      orderBy: { createdAt: 'desc' },
     });
     if (dbMeeting) {
       dbMeetingId = dbMeeting.id;

@@ -239,10 +239,11 @@ async function handleRTMSStopped(payload) {
     }
   }
 
-  // Mark meeting as completed
+  // Mark the most recent meeting as completed
   try {
     const meeting = await prisma.meeting.findFirst({
       where: { zoomMeetingId: meeting_uuid },
+      orderBy: { createdAt: 'desc' },
     });
 
     if (meeting) {
@@ -292,6 +293,7 @@ async function handleTranscript(meetingId, transcript) {
     // Find or create meeting — use operatorId from session to assign real owner
     let meeting = await prisma.meeting.findFirst({
       where: { zoomMeetingId: meetingId },
+      orderBy: { createdAt: 'desc' },
     });
 
     if (!meeting) {
