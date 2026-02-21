@@ -50,8 +50,8 @@ Arlo is designed to help developers quickly prototype and deploy their own meeti
 - 🏠 **Home Dashboard** — AI highlights and reminders from recent meetings
 - 🌙 **Dark Mode** — OS detection with manual toggle, persisted preference
 - 📄 **Export Markdown** — Download meeting summary + transcript as MD
-- 🏗️ **Multi-View Architecture** — 9 views with HashRouter, shared AppShell
-- 🔐 **Secure** - Zoom OAuth, encrypted tokens, RLS data isolation
+- 🏗️ **Multi-View Architecture** — 14 views with HashRouter, shared AppShell
+- 🔐 **Secure** - Zoom OAuth, encrypted tokens, ownership-enforced data isolation, rate limiting, HMAC webhook verification
 
 ---
 
@@ -317,9 +317,10 @@ Comprehensive guides available in [`/docs/`](./docs/):
 arlo-meeting-assistant/
 ├── backend/          # Express API server
 │   ├── src/
-│   │   ├── server.js       # Main server
+│   │   ├── server.js       # Main server + rate limiting
 │   │   ├── config.js       # Environment config
-│   │   ├── routes/         # API routes
+│   │   ├── lib/prisma.js   # Singleton PrismaClient
+│   │   ├── routes/         # API routes (9 modules)
 │   │   └── services/       # Business logic
 │   └── prisma/
 │       └── schema.prisma   # Database schema
@@ -331,10 +332,11 @@ arlo-meeting-assistant/
 │   └── src/
 │       ├── App.js           # HashRouter, routes, provider hierarchy
 │       ├── index.css        # Design tokens, typography, themes
-│       ├── views/           # 9 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, Settings, Guest×2, NotFound)
+│       ├── views/           # 14 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, Search, Settings, Upcoming, Guest×2, Landing, Onboarding, OAuthError, NotFound)
 │       ├── contexts/        # 5 contexts (Auth, ZoomSdk, Meeting, Theme, Toast)
 │       ├── hooks/           # useZoomAuth (OAuth PKCE)
-│       ├── components/      # AppShell, LiveTranscript, AIPanel, MeetingCard, etc.
+│       ├── utils/           # Shared formatters (timestamps, durations, dates)
+│       ├── components/      # AppShell, DeleteMeetingDialog, ParticipantTimeline, MeetingCard, etc.
 │       └── components/ui/   # Button, Card, Badge, Input, Textarea, LoadingSpinner
 │
 ├── rtms/             # RTMS transcript ingestion

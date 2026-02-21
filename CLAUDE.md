@@ -106,10 +106,11 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
 ## Key Files & Architecture Details
 
 ### Backend (`backend/src/`)
-- `server.js` — Express app setup, middleware, route mounting
+- `server.js` — Express app setup, middleware, route mounting, rate limiting, graceful shutdown
 - `config.js` — Environment variable validation
+- `lib/prisma.js` — Singleton PrismaClient (all route/service modules import from here)
 - `routes/` — 9 route modules: auth, meetings, ai, home, rtms, search, highlights, zoom-meetings, preferences
-- `services/` — auth (token/PKCE/encryption), openrouter (LLM), websocket (broadcast), zoomApi (Zoom REST helper with token refresh)
+- `services/` — auth (token/PKCE/encryption), openrouter (LLM), websocket (broadcast), zoomApi (Zoom REST helper with token refresh + mutex)
 - `middleware/auth.js` — `requireAuth` and `optionalAuth` session middleware
 
 ### Frontend (`frontend/src/`)
@@ -118,15 +119,18 @@ Implemented in `useZoomAuth` hook (`frontend/src/hooks/useZoomAuth.js`) — sing
 - `views/` — 14 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, SearchResults, Settings, Upcoming, GuestNoMeeting, GuestInMeeting, LandingPage, Onboarding, OAuthError, NotFound)
 - `contexts/` — AuthContext (session), ZoomSdkContext (SDK init), MeetingContext (active meeting + WS), ThemeContext (light/dark), ToastContext
 - `hooks/useZoomAuth.js` — In-client OAuth PKCE flow hook
+- `utils/formatters.js` — Shared utilities (formatTimestamp, formatDuration, formatMeetingDate)
 - `components/AppShell.js` — Persistent header (back, logo, search, theme toggle, settings) + `<Outlet />`
 - `components/ui/` — Unstyled primitives: Button, Card, Badge, Input, Textarea, LoadingSpinner
 
 ### Database
 - `backend/prisma/schema.prisma` — PostgreSQL schema
 - Key models: User, Meeting, Speaker, TranscriptSegment, Highlight, VttFile, UserToken, ParticipantEvent
+- `Speaker` has `@@unique([meetingId, zoomParticipantId])` compound constraint
 - `TranscriptSegment.seqNo` is UNIQUE per meeting (idempotency)
 - Full-text search uses Postgres GIN index on `text` column
 - All queries filtered by `ownerId` (row-level data isolation)
+- Highlight/AiCitation timestamp fields use `BigInt` (epoch milliseconds)
 
 ### Monorepo (npm workspaces)
 
@@ -140,7 +144,7 @@ npm install <package> -w rtms         # Add to rtms
 
 ### Docker Startup Behavior
 
-Docker Compose runs `npx prisma db push` (not migrations) on backend startup to sync the schema. This means schema changes via `schema.prisma` are applied automatically when rebuilding containers — no migration files needed for development. Use `docker-compose up --build -V` when npm dependencies change (recreates volumes).
+Docker Compose runs `npx prisma db push --skip-generate` (not migrations) on backend startup to sync the schema. This means schema changes via `schema.prisma` are applied automatically when rebuilding containers — no migration files needed for development. Use `docker-compose up --build -V` when npm dependencies change (recreates volumes).
 
 ## Frontend UI (Base UI)
 
@@ -160,7 +164,7 @@ import { Tabs } from '@base-ui/react/tabs';
 
 ### Base UI Components in Use
 
-Tabs (AIPanel, MeetingDetailView, InMeetingView), ScrollArea (LiveTranscript, MeetingDetailView, InMeetingView), Tooltip (HighlightsPanel, TestPage), AlertDialog (TestPage), Field (HighlightsPanel).
+Tabs (MeetingDetailView, InMeetingView), ScrollArea (MeetingDetailView, InMeetingView).
 
 ### Styling Conventions
 
@@ -284,6 +288,11 @@ DEFAULT_MODEL=google/gemini-2.0-flash-thinking-exp:free
 - httpOnly session cookies, never expose tokens to frontend
 - All API calls from frontend use `fetch` with `credentials: 'include'`
 - HTTP headers required by Zoom Apps: `Strict-Transport-Security`, `X-Content-Type-Options`, `Content-Security-Policy`, `Referrer-Policy`
+- **Rate limiting:** Global (1000/15min), auth endpoints (30/15min), AI endpoints (20/1min) via `express-rate-limit`
+- **Ownership checks:** All meeting routes enforce `ownerId: req.user.id` — users can only access their own data
+- **Timing-safe JWT comparison:** `crypto.timingSafeEqual` in `services/auth.js`
+- **RTMS webhook HMAC:** `x-zm-signature` verification with replay protection in RTMS service
+- **Token refresh mutex:** Per-user lock prevents concurrent Zoom token refresh race conditions
 
 ## Documentation Reference
 
@@ -295,7 +304,8 @@ DEFAULT_MODEL=google/gemini-2.0-flash-thinking-exp:free
 
 ## Known Issues
 
-- Pre-existing lint warning in `HighlightsPanel.js` (missing dep in useEffect) — not to be fixed unless asked
 - No automated tests exist yet (manual testing only)
 - Frontend uses CRA (react-scripts), NOT Next.js
 - If RTMS stream starts before the app is opened in a meeting, the "Start" chat notice is never sent. The disclaimer/notice should be sent when the app opens and detects RTMS is already active.
+- Guest transcript access is permissive — anyone with a Zoom meeting ID can read transcripts via WebSocket or REST. See ROADMAP.md for planned mitigation.
+- HomeView weekly digest, action items, and recurring topics sections use hardcoded mock data (API endpoints planned)
