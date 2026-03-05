@@ -10,6 +10,32 @@ router.use(devAuthBypass); // Allow dev mode query param bypass
 // NOTE: Not using requireAuth on GET routes to allow anonymous access to meetings
 
 /**
+ * Find a meeting by Zoom meeting UUID, with fallback for SDK/RTMS UUID mismatch.
+ * The Zoom SDK provides a different UUID than the RTMS webhook — when the exact
+ * match fails, falls back to the user's most recent ongoing meeting.
+ */
+async function findMeetingByZoomId(zoomMeetingId, userId, findOptions = {}) {
+  let meeting = await prisma.meeting.findUnique({
+    where: { zoomMeetingId },
+    ...findOptions,
+  });
+  if (meeting) return meeting;
+
+  // Fallback: SDK UUID may differ from RTMS UUID
+  if (userId) {
+    meeting = await prisma.meeting.findFirst({
+      where: { ownerId: userId, status: 'ongoing' },
+      orderBy: { startTime: 'desc' },
+      ...findOptions,
+    });
+    if (meeting) {
+      console.log(`📡 UUID fallback: SDK "${zoomMeetingId}" → RTMS "${meeting.zoomMeetingId}"`);
+    }
+  }
+  return meeting;
+}
+
+/**
  * GET /api/meetings
  * List meetings (all meetings if no auth, user's meetings if authenticated)
  */
@@ -79,9 +105,7 @@ router.patch('/by-zoom-id/:zoomMeetingId/topic', optionalAuth, async (req, res) 
       return res.status(401).json({ error: 'Authentication required for explicit rename' });
     }
 
-    const meeting = await prisma.meeting.findUnique({
-      where: { zoomMeetingId },
-    });
+    const meeting = await findMeetingByZoomId(zoomMeetingId, req.user?.id);
 
     if (!meeting) {
       return res.status(404).json({ error: 'Meeting not found' });
@@ -131,8 +155,7 @@ router.get('/by-zoom-id/:zoomMeetingId', optionalAuth, async (req, res) => {
   try {
     const { zoomMeetingId } = req.params;
 
-    const meeting = await prisma.meeting.findUnique({
-      where: { zoomMeetingId },
+    const meeting = await findMeetingByZoomId(zoomMeetingId, req.user?.id, {
       include: {
         speakers: {
           select: { id: true, displayName: true, label: true },
@@ -164,9 +187,7 @@ router.get('/by-zoom-id/:zoomMeetingId/transcript', optionalAuth, async (req, re
     const { zoomMeetingId } = req.params;
     const { limit = 500 } = req.query;
 
-    const meeting = await prisma.meeting.findUnique({
-      where: { zoomMeetingId },
-    });
+    const meeting = await findMeetingByZoomId(zoomMeetingId, req.user?.id);
 
     if (!meeting) {
       return res.status(404).json({ error: 'Meeting not found' });
@@ -203,9 +224,7 @@ router.get('/by-zoom-id/:zoomMeetingId/participant-events', optionalAuth, async 
   try {
     const { zoomMeetingId } = req.params;
 
-    const meeting = await prisma.meeting.findUnique({
-      where: { zoomMeetingId },
-    });
+    const meeting = await findMeetingByZoomId(zoomMeetingId, req.user?.id);
 
     if (!meeting) {
       return res.status(404).json({ error: 'Meeting not found' });

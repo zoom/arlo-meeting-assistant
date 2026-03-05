@@ -105,6 +105,14 @@ function initWebSocketServer(server) {
           broadcastPresence(disconnectedMeetingId);
         }
       }
+
+      // Also clean up cross-registered RTMS UUID connection (SDK/RTMS mismatch)
+      if (ws.rtmsMeetingId && connections.has(ws.rtmsMeetingId)) {
+        connections.get(ws.rtmsMeetingId).delete(ws);
+        if (connections.get(ws.rtmsMeetingId).size === 0) {
+          connections.delete(ws.rtmsMeetingId);
+        }
+      }
     });
 
     // Send welcome message
@@ -179,10 +187,33 @@ async function handleWebSocketMessage(ws, data) {
         prisma.meeting.findUnique({
           where: { zoomMeetingId: meetingId },
         }).then(meeting => {
+          if (!meeting && ws.userId) {
+            // Fallback: SDK UUID may differ from RTMS UUID — find user's ongoing meeting
+            return prisma.meeting.findFirst({
+              where: { ownerId: ws.userId, status: 'ongoing' },
+              orderBy: { startTime: 'desc' },
+            });
+          }
+          return meeting;
+        }).then(meeting => {
           if (!meeting) {
             console.log(`📡 WS subscribe: no meeting found for zoomMeetingId="${meetingId}"`);
             return;
           }
+
+          // If found via fallback (different UUID), cross-register under RTMS UUID
+          // so transcript broadcasts (keyed by RTMS UUID) reach this client
+          if (meeting.zoomMeetingId !== meetingId) {
+            const rtmsUuid = meeting.zoomMeetingId;
+            console.log(`📡 WS UUID fallback: SDK "${meetingId}" → RTMS "${rtmsUuid}"`);
+            if (!connections.has(rtmsUuid)) {
+              connections.set(rtmsUuid, new Set());
+            }
+            connections.get(rtmsUuid).add(ws);
+            // Track the RTMS UUID on the socket for cleanup on disconnect
+            ws.rtmsMeetingId = rtmsUuid;
+          }
+
           console.log(`📡 WS subscribe: found meeting id=${meeting.id}, status="${meeting.status}" for zoomMeetingId="${meetingId}"`);
           if (ws.readyState !== WebSocket.OPEN) return;
           if (meeting.status === 'ongoing') {
@@ -384,6 +415,41 @@ function broadcastMeetingStatus(meetingId, status) {
 }
 
 /**
+ * Cross-register a user's existing WS connections under an RTMS meeting UUID.
+ * Called when a new RTMS session starts — the user's WS is subscribed under the
+ * SDK UUID, but transcripts are broadcast under the RTMS UUID.
+ */
+function crossRegisterUser(userId, rtmsMeetingId) {
+  if (!userConnections.has(userId)) return 0;
+
+  const clients = userConnections.get(userId);
+  if (!connections.has(rtmsMeetingId)) {
+    connections.set(rtmsMeetingId, new Set());
+  }
+
+  let count = 0;
+  clients.forEach(ws => {
+    if (ws.readyState === WebSocket.OPEN) {
+      connections.get(rtmsMeetingId).add(ws);
+      // Clean up old cross-registration if present
+      if (ws.rtmsMeetingId && ws.rtmsMeetingId !== rtmsMeetingId && connections.has(ws.rtmsMeetingId)) {
+        connections.get(ws.rtmsMeetingId).delete(ws);
+        if (connections.get(ws.rtmsMeetingId).size === 0) {
+          connections.delete(ws.rtmsMeetingId);
+        }
+      }
+      ws.rtmsMeetingId = rtmsMeetingId;
+      count++;
+    }
+  });
+
+  if (count > 0) {
+    console.log(`📡 Cross-registered ${count} WS connection(s) for user ${userId} under RTMS UUID "${rtmsMeetingId}"`);
+  }
+  return count;
+}
+
+/**
  * Get connection statistics
  */
 function getStats() {
@@ -404,5 +470,6 @@ module.exports = {
   broadcastParticipantEvent,
   broadcastAiSuggestion,
   broadcastMeetingStatus,
+  crossRegisterUser,
   getStats,
 };

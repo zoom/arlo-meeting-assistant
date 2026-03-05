@@ -108,13 +108,10 @@ services:
     volumes:
       - ./rtms/src:/app/src
       - /app/node_modules
-      - ./rtms/prisma:/app/prisma
     depends_on:
-      postgres:
-        condition: service_healthy
       backend:
         condition: service_started
-    command: sh -c "npx prisma generate && npm start"
+    command: npm start
 
 volumes:
   postgres_data:

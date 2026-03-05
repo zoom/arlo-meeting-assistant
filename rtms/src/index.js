@@ -63,7 +63,9 @@ app.post('/webhook', async (req, res) => {
   const { event, payload } = req.body;
 
   // Skip HMAC verification for URL validation (uses its own mechanism)
-  if (event !== 'endpoint.url_validation') {
+  // Also skip for internally forwarded requests from the backend (already verified)
+  const isInternal = req.headers['x-arlo-internal'] === 'true';
+  if (event !== 'endpoint.url_validation' && !isInternal) {
     if (!verifyWebhookSignature(req)) {
       console.error('Webhook signature verification failed');
       return res.status(401).send('Unauthorized');

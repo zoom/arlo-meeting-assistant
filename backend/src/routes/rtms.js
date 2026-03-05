@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const router = express.Router();
 const config = require('../config');
-const { broadcastTranscriptSegment, broadcastParticipantEvent, broadcastMeetingStatus, getStats } = require('../services/websocket');
+const { broadcastTranscriptSegment, broadcastParticipantEvent, broadcastMeetingStatus, crossRegisterUser, getStats } = require('../services/websocket');
 const { zoomGet } = require('../services/zoomApi');
 const prisma = require('../lib/prisma');
 
@@ -51,6 +51,13 @@ router.post('/webhook', async (req, res) => {
       const rtmsServiceUrl = process.env.RTMS_SERVICE_URL || 'http://rtms:3002';
       await axios.post(`${rtmsServiceUrl}/webhook`, req.body, {
         timeout: 5000,
+        headers: {
+          // Forward Zoom signature headers for verification
+          'x-zm-signature': req.headers['x-zm-signature'] || '',
+          'x-zm-request-timestamp': req.headers['x-zm-request-timestamp'] || '',
+          // Mark as internally forwarded (backend already validated the source)
+          'x-arlo-internal': 'true',
+        },
       });
       console.log(`✅ Forwarded ${event} to RTMS service`);
     } catch (error) {
@@ -147,6 +154,11 @@ router.post('/status', async (req, res) => {
       // Cache the meeting ID mapping
       meetingCache.set(meetingId, dbMeeting.id);
       dbMeetingId = dbMeeting.id;
+
+      // Cross-register any existing WS connections for this user under the RTMS UUID.
+      // The frontend's WS is subscribed under the SDK UUID (which differs from the
+      // RTMS UUID), so we need to ensure transcript broadcasts reach the client.
+      crossRegisterUser(owner.id, meetingId);
 
       // Enrich meeting metadata from Zoom API (non-blocking)
       if (owner.zoomUserId !== 'system') {

@@ -25,8 +25,10 @@ export default function AuthView() {
   useEffect(() => {
     if (!isAuthenticated) return;
     if (runningContext === null) return; // SDK still loading
+    // Wait for meeting context when in a meeting (fetched async after runningContext)
+    if (runningContext === 'inMeeting' && !meetingContext?.meetingUUID) return;
     navigate(getPostAuthDestination(), { replace: true });
-  }, [isAuthenticated, runningContext, navigate, getPostAuthDestination]);
+  }, [isAuthenticated, runningContext, meetingContext, navigate, getPostAuthDestination]);
 
   // In explicit dev mode (?test=true), allow auth bypass
   useEffect(() => {
