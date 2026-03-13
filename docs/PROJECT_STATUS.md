@@ -1,6 +1,6 @@
 # Arlo Meeting Assistant — Project Status
 
-**Last Updated:** 2026-02-15
+**Last Updated:** 2026-03-13
 **Version:** v1.0
 **Spec:** See [`/SPEC.md`](../SPEC.md) for the authoritative feature specification and version milestones.
 
@@ -46,10 +46,11 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
 ## Code Statistics
 
 - **Backend:** ~2,850 lines (9 route files, 4 services, middleware) — JavaScript/Express
-- **Frontend:** ~5,200 lines (14 views, 5 contexts, 1 hook, 6 UI primitives, 14 shared components) — React 18 + `@base-ui/react` + plain CSS
+- **Frontend:** ~11,600 lines (15 views, 6 contexts, 1 hook, 6 UI primitives, 14 shared components, 5 feature verticals) — React 18 + `@base-ui/react` + plain CSS
+- **Feature Verticals:** ~6,400 lines across 5 verticals (general, healthcare, legal, sales, support)
 - **RTMS:** ~370 lines (ingestion worker) — @zoom/rtms v1.0.2
 - **Documentation:** 15+ guides including reusable Zoom Apps skills
-- **Total:** ~8,500+ lines of production-quality code
+- **Total:** ~15,000+ lines of production-quality code
 
 ---
 
@@ -95,6 +96,14 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
 - **Web OAuth redirect flow** — Browser-based OAuth for Marketplace installs (`GET /api/auth/start` → Zoom OAuth → `GET /api/auth/callback`). Three new views: LandingPageView, OnboardingView, OAuthErrorView.
 - **Participant event tracking + timeline** — `ParticipantEvent` DB model, swimlane timeline visualization (`ParticipantTimeline` component), inline events in InMeetingView. Initial roster filtering via `firstTranscriptReceived` flag.
 - **Meeting attribution via RTMS operator ID** — Orphaned meetings (created by system user during RTMS auto-start) are automatically reassigned to the real user when they open Arlo.
+- **Industry Verticals** (Mar 2026) — 5 specialized modes with custom UI components:
+  - **General (Default)**: MeetingSummary, KeyMoments, DecisionsLog, OpenQuestions, ParticipantStats, SmartBookmarks
+  - **Healthcare**: SOAPNotesPanel, PatientContextCard, ClinicalAlerts, QuickActions, PreviousSessionsCard, HealthcareTagsSummary
+  - **Legal**: ContradictionDetector, LegalTermsPanel, ExhibitTracker, PrivilegeMarkers
+  - **Sales**: DealTracker, QualificationSignals, CompetitorMentions, CommitmentsPanel
+  - **Support**: SentimentMeter, EscalationAlerts, ResolutionTracker, AgentAssist
+  - VerticalContext provider with accent colors, terminology customization, feature flags
+  - VerticalSelectorView for first-run setup, Settings toggle for switching
 
 ### Not Yet Done
 
@@ -105,6 +114,11 @@ Open-source Zoom Apps starter kit for building intelligent meeting assistants us
 - GitHub issue templates
 - End-to-end fresh install test
 - Post-meeting standalone web app (v1.5 goal)
+- **Industry Vertical AI Integration** — Vertical components currently use demo data. Future work:
+  - Real-time AI extraction for medical terms, legal terms, competitor mentions
+  - Sentiment analysis from transcript segments
+  - Auto-detection of decisions, questions, action items
+  - Integration with existing AI service for vertical-specific prompts
 
 ---
 

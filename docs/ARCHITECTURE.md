@@ -312,6 +312,69 @@ A standalone web app for browsing meeting history outside of Zoom is planned for
 
 ---
 
+### 5. Industry Verticals
+
+**Location:** `/frontend/src/features/`
+
+The application supports **5 industry-specific modes** that customize the UI, terminology, and AI prompts for different use cases. Each vertical is a collection of React components rendered in the "Arlo Assist" tab during live meetings.
+
+**Architecture:**
+
+```
+VerticalContext (React Context)
+├── verticalId: 'notes' | 'healthcare' | 'legal' | 'sales' | 'support'
+├── accentColor: CSS custom property
+├── terminology: { session, participant, actionItem }
+├── features: string[] (feature flags)
+└── aiPromptPrefix: string (AI system prompt modifier)
+
+/features/
+├── general/          # Default note-taker (6 components)
+│   ├── MeetingSummary.js     # AI-generated summary with key points
+│   ├── KeyMoments.js         # Auto-detected highlights (announcements, decisions)
+│   ├── DecisionsLog.js       # Track decisions with attribution
+│   ├── OpenQuestions.js      # Unanswered questions tracker
+│   ├── ParticipantStats.js   # Talk time and participation balance
+│   └── SmartBookmarks.js     # Quick categorized bookmarking
+│
+├── healthcare/       # Clinical documentation (6 components)
+│   ├── SOAPNotesPanel.js     # Subjective/Objective/Assessment/Plan
+│   ├── PatientContextCard.js # Conditions, allergies, medications
+│   ├── ClinicalAlerts.js     # Drug interactions, contradictions
+│   ├── QuickActions.js       # Lab orders, referrals, Rx templates
+│   ├── PreviousSessionsCard.js
+│   └── HealthcareTagsSummary.js
+│
+├── legal/            # Depositions & testimony (4 components)
+│   ├── ContradictionDetector.js  # Flag conflicting statements
+│   ├── LegalTermsPanel.js        # Parties, dates, amounts, citations
+│   ├── ExhibitTracker.js         # Document references with timestamps
+│   └── PrivilegeMarkers.js       # Attorney-client privilege flags
+│
+├── sales/            # Deal tracking & qualification (4 components)
+│   ├── DealTracker.js           # Pipeline stage, value, contacts
+│   ├── QualificationSignals.js  # Budget/Authority/Need/Timeline
+│   ├── CompetitorMentions.js    # Competitive intel with sentiment
+│   └── CommitmentsPanel.js      # Next steps with ownership
+│
+└── support/          # Customer support & call center (4 components)
+    ├── SentimentMeter.js       # Live customer mood gauge
+    ├── EscalationAlerts.js     # Manager requests, churn risk
+    ├── ResolutionTracker.js    # Issue → Solution → Confirmed
+    └── AgentAssist.js          # Knowledge suggestions, compliance
+```
+
+**Selection Flow:**
+1. First launch → `VerticalSelectorView` → User picks vertical
+2. Selection stored in `localStorage('arlo-vertical')`
+3. `VerticalContext` provides vertical config to all components
+4. `InMeetingView` conditionally renders vertical-specific components
+5. User can switch verticals anytime in Settings
+
+**Current Status:** Components use demo data for visualization. Future work will integrate real-time AI extraction from transcript segments.
+
+---
+
 ## Data Flow Diagrams
 
 ### 1. RTMS Ingestion Flow
