@@ -29,9 +29,9 @@ Arlo is designed to help developers quickly prototype and deploy their own meeti
 
 **To get RTMS access:**
 
-1. **Request a Free Trial** - Post in the [Zoom Developer Forum](https://devforum.zoom.us/) requesting RTMS access for development
-2. **Include your use case** - Mention you're building a meeting assistant with Arlo
-3. **Wait for approval** - The Zoom team will enable RTMS on your account (usually within 1-2 business days)
+1. **Fill out the RTMS access form** at [zoom.com/realtime-media-streams](https://www.zoom.com/en/realtime-media-streams/#form)
+2. **Describe your use case** - Mention you're building a meeting assistant
+3. **Wait for approval** - The Zoom team will review your request and enable RTMS on your account
 
 **Without RTMS access, this application will not work.** The entire purpose of this starter kit is to demonstrate the power of RTMS for building real-time meeting intelligence.
 
@@ -52,6 +52,45 @@ Arlo is designed to help developers quickly prototype and deploy their own meeti
 - 📄 **Export Markdown** — Download meeting summary + transcript as MD
 - 🏗️ **Multi-View Architecture** — 14 views with HashRouter, shared AppShell
 - 🔐 **Secure** - Zoom OAuth, encrypted tokens, ownership-enforced data isolation, rate limiting, HMAC webhook verification
+- 🏥 **Industry Verticals** — Specialized modes for Healthcare, Legal, Sales, Finance, and general note-taking
+
+---
+
+## 🏥 Industry Verticals
+
+Arlo supports **industry-specific modes** that customize the AI prompts, features, terminology, and UI for different use cases. Select your vertical during first-run setup or change it anytime in Settings.
+
+### Healthcare (Clinical Documentation)
+
+Designed for doctors and clinicians who need to document patient encounters while staying present with their patients.
+
+- **SOAP Notes Panel** — Auto-populated Subjective, Objective, Assessment, and Plan sections
+- **Visit Templates** — Pre-configured templates for different encounter types
+- **ICD-10/CPT Codes** — AI-suggested diagnosis and procedure codes
+- **Patient Context** — Sidebar showing conditions, allergies, and medications
+- **Previous Sessions** — Quick access to past appointment notes
+- **Clinical Alerts** — Real-time warnings for drug interactions, contradictions, allergy mentions
+- **Quick Actions** — One-click lab orders, referrals, Rx templates, follow-up scheduling
+- **Patient Summary** — Generate plain-language handouts for patients
+
+### Legal (Depositions & Testimony)
+
+Built for attorneys handling depositions, client interviews, and witness testimony.
+
+- **Contradiction Detector** — Flags conflicting statements with severity levels and side-by-side comparison
+- **Key Terms Panel** — Auto-extracts parties, dates, amounts, locations, documents, and legal citations
+- **Exhibit Tracker** — Log and track document references with timestamps and context
+- **Privilege Markers** — Mark attorney-client, work product, and confidential sections
+- **Objection Log** — Quick-add common objections (leading, compound, relevance, assumes facts)
+- **Certified Timestamps** — All transcript segments include precise timestamps for the record
+
+### Notes (General Purpose)
+
+The default mode for general meeting notes, action items, and summaries.
+
+### Sales & Finance
+
+Coming soon — specialized features for deal tracking, compliance documentation, and more.
 
 ---
 
@@ -63,7 +102,7 @@ Arlo is designed to help developers quickly prototype and deploy their own meeti
 - **Docker** + Docker Compose ([Download](https://www.docker.com/))
 - **ngrok** account + CLI ([Sign up free](https://ngrok.com/)) - Exposes localhost to internet for webhooks
 - **Zoom Account** with Marketplace access
-- **🔴 RTMS Access** - **REQUIRED!** Request via [Zoom Developer Forum](https://devforum.zoom.us/)
+- **🔴 RTMS Access** - **REQUIRED!** [Request access here](https://www.zoom.com/en/realtime-media-streams/#form)
 
 **💡 Recommended:** Create a free ngrok account to get a static domain - makes webhook testing much easier!
 
@@ -78,22 +117,10 @@ cd arlo-meeting-assistant
 
 **This step is required before you can use RTMS features:**
 
-1. Go to [Zoom Developer Forum](https://devforum.zoom.us/)
-2. Create a new post with the title: **"Request RTMS Access for Meeting Assistant Development"**
-3. In your post, include:
-   ```
-   Hi Zoom team,
-
-   I'm building a meeting assistant using the Arlo Meeting Assistant starter kit
-   and would like to request RTMS access for development and testing.
-
-   Account email: [your-zoom-email@example.com]
-   Use case: Building a real-time meeting assistant with live transcription
-   App name: [Your App Name]
-
-   Thank you!
-   ```
-4. **Wait for approval** (usually 1-2 business days)
+1. Go to [zoom.com/realtime-media-streams](https://www.zoom.com/en/realtime-media-streams/#form)
+2. Fill out the access request form with your details
+3. Describe your use case (e.g., "Building a real-time meeting assistant with live transcription")
+4. **Wait for approval** - The Zoom team will review and enable RTMS on your account
 5. Once approved, RTMS features will appear in your Zoom App settings
 
 ### 3. Create Zoom App
@@ -332,11 +359,14 @@ arlo-meeting-assistant/
 │   └── src/
 │       ├── App.js           # HashRouter, routes, provider hierarchy
 │       ├── index.css        # Design tokens, typography, themes
-│       ├── views/           # 14 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, Search, Settings, Upcoming, Guest×2, Landing, Onboarding, OAuthError, NotFound)
-│       ├── contexts/        # 5 contexts (Auth, ZoomSdk, Meeting, Theme, Toast)
+│       ├── views/           # 15 views (Auth, Home, MeetingsList, MeetingDetail, InMeeting, Search, Settings, Upcoming, Guest×2, Landing, Onboarding, OAuthError, NotFound, VerticalSelector)
+│       ├── contexts/        # 6 contexts (Auth, ZoomSdk, Meeting, Theme, Toast, Vertical)
+│       ├── features/        # Industry vertical components
+│       │   ├── healthcare/  # SOAP notes, clinical alerts, patient context, quick actions
+│       │   └── legal/       # Contradiction detector, exhibit tracker, privilege markers
 │       ├── hooks/           # useZoomAuth (OAuth PKCE)
 │       ├── utils/           # Shared formatters (timestamps, durations, dates)
-│       ├── components/      # AppShell, DeleteMeetingDialog, ParticipantTimeline, MeetingCard, etc.
+│       ├── components/      # AppShell, ArloLogo, DeleteMeetingDialog, ParticipantTimeline, MeetingCard, etc.
 │       └── components/ui/   # Button, Card, Badge, Input, Textarea, LoadingSpinner
 │
 ├── rtms/             # RTMS transcript ingestion
@@ -524,7 +554,7 @@ MIT License - See [LICENSE](./LICENSE) for details
 
 - **Issues:** [GitHub Issues](https://github.com/your-org/arlo-meeting-assistant/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/your-org/arlo-meeting-assistant/discussions)
-- **RTMS Access Requests:** [Zoom Developer Forum](https://devforum.zoom.us/) - Post here to request free RTMS trial
+- **RTMS Access Requests:** [zoom.com/realtime-media-streams](https://www.zoom.com/en/realtime-media-streams/#form)
 - **General Zoom Support:** [devforum.zoom.us](https://devforum.zoom.us/)
 
 ---
